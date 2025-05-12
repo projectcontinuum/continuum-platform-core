@@ -1,11 +1,10 @@
 plugins {
     kotlin("jvm") version "2.1.0"
     kotlin("plugin.spring") version "1.9.25"
-//    id("org.springframework.boot") version "3.4.0"
     id("io.spring.dependency-management") version "1.1.6"
 }
 
-group = "com.continuum.core"
+group = "com.continuum.base"
 version = "1.0.0"
 
 java {
@@ -45,6 +44,9 @@ dependencies {
     implementation("io.temporal:temporal-kotlin")
     implementation("io.temporal:temporal-spring-boot-starter")
 
+    // MQTT dependencies
+    implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
+
     // AWS dependencies
     implementation("software.amazon.awssdk:s3")
     implementation("software.amazon.awssdk:sts")
@@ -54,7 +56,7 @@ dependencies {
     implementation("software.amazon.awssdk:s3-transfer-manager")
 
     // Nodes
-//    implementation(project(":continuum-knime-base"))
+    implementation(project(":continuum-knime-base"))
 
     // Test dependencies
     testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -81,5 +83,5 @@ kotlin {
 }
 
 tasks.withType<Test> {
-//    useJUnitPlatform()
+    useJUnitPlatform()
 }
