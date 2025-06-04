@@ -3,9 +3,16 @@ import DialogTitle from '@mui/material/DialogTitle';
 import Dialog from '@mui/material/Dialog';
 import { Box, Button, DialogActions, DialogContent, IconButton, Typography, styled } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+// @ts-ignore-next-line
 import { JsonForms } from '@jsonforms/react';
+// @ts-ignore-next-line
 import { materialCells, materialRenderers } from '@jsonforms/material-renderers';
 import { JsonFormsCore, JsonSchema, UISchemaElement } from '@jsonforms/core';
+import knimeNodeDialog from 'knime-core-ui/dist/NodeDialog';
+import ContinuumUIExtensionService from "../../service/ContinuumUIExtentionService";
+import mockForm from '../../service/mocks/advancedSettings.json'
+import './NodeDialog.css';
+// import "@fontsource/roboto/files/"
 
 const StyledDialog = styled(Dialog)(({ theme }) => ({
     '& .MuiDialogContent-root': {
@@ -28,8 +35,9 @@ export interface NodeDialogProps {
 }
 
 export default function NodeDialog({ onClose, onSave, readOnly=false, open, initialData, dataSchema, uiSchema }: NodeDialogProps) {
-
+    // @ts-ignore-next-line
     const [data, setData] = React.useState(initialData);
+    // @ts-ignore-next-line
     const [hasErrors, setHasErrors] = React.useState(false);
 
     const handleClose = React.useCallback((args: any) => {
@@ -41,11 +49,34 @@ export default function NodeDialog({ onClose, onSave, readOnly=false, open, init
         console.log("onSavePressed", args);
         onSave(data);
     }, [data]);
-
+    // @ts-ignore-next-line
     const onDataChange = React.useCallback(({errors, data}: Pick<JsonFormsCore, "data" | "errors">) => {
         setData(data);
         errors && setHasErrors(errors.length > 0)
     }, [data]);
+
+    const vueContainerRef = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        if (open) {
+            const timer = setTimeout(() => {
+                if (vueContainerRef.current) {
+                    console.log("knimeNodeDialog Loaded...", knimeNodeDialog);
+                    let continuumUIExtensionService = new ContinuumUIExtensionService(
+                            "NodeDialog",
+                            mockForm.result.data,
+                            mockForm.result.schema,
+                            mockForm.result.ui_schema
+                    );
+                    knimeNodeDialog(vueContainerRef.current, continuumUIExtensionService);
+                } else {
+                    console.error("Vue container ref is not set");
+                }
+            }, 0); // Delay execution to ensure DOM is rendered
+
+            return () => clearTimeout(timer); // Cleanup timer
+        }
+    }, [vueContainerRef, open, knimeNodeDialog]);
 
     return (
         <StyledDialog 
@@ -68,13 +99,14 @@ export default function NodeDialog({ onClose, onSave, readOnly=false, open, init
                     minWidth: "500px",
                     minHeight: "500px",
                     p: 5}}>
-                    <JsonForms
-                        schema={dataSchema}
-                        uischema={uiSchema}
-                        data={data}
-                        renderers={materialRenderers}
-                        cells={materialCells}
-                        onChange={onDataChange}/>
+                    <div ref={vueContainerRef} />
+                    {/*<JsonForms*/}
+                    {/*    schema={dataSchema}*/}
+                    {/*    uischema={uiSchema}*/}
+                    {/*    data={data}*/}
+                    {/*    renderers={materialRenderers}*/}
+                    {/*    cells={materialCells}*/}
+                    {/*    onChange={onDataChange}/>*/}
                 </Box>
             </DialogContent>
             <DialogActions>

@@ -13,8 +13,7 @@
     "@continuum/core": "*",
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
-    "@fontsource/roboto": "^5.0.8",
-    "@jsonforms/core": "3.2.0",
+    "@jsonforms/core": "3.4.0",
     "@jsonforms/material-renderers": "3.2.0",
     "@jsonforms/react": "3.2.0",
     "@mui/icons-material": "^5.15.6",
@@ -37,7 +36,13 @@
     "react-svg": "^16.1.32",
     "reactflow": "^11.10.1",
     "zustand": "^4.5.0",
-    "mqtt": "5.10.3"
+    "mqtt": "5.10.3",
+    "@knime/jsonforms": "1.12.0",
+    "@knime/styles": "1.2.0",
+    "@fontsource/roboto": "4.5.8",
+    "@fontsource/roboto-mono": "4.5.10",
+    "knime-core-ui": "file:/Users/L001418/Projects/KNIME/knime-core-ui/org.knime.core.ui/js-src",
+    "consola": "^3.4.0"
   },
   "devDependencies": {
     "@types/react": "^18",
@@ -45,6 +50,9 @@
     "copyfiles": "latest",
     "rimraf": "latest",
     "typescript": "^5"
+  },
+  "peerDependencies": {
+    "vue": "3.5.13"
   },
   "scripts": {
     "clean": "rimraf lib",
