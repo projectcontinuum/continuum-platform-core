@@ -41,7 +41,7 @@
     "@knime/styles": "1.2.0",
     "@fontsource/roboto": "4.5.8",
     "@fontsource/roboto-mono": "4.5.10",
-    "knime-core-ui": "file:/Users/L001418/Projects/ContinuumWorkflow/continuum-frontend/submodules/knime-core-ui/org.knime.core.ui/js-src",
+    "knime-core-ui": "file:../submodules/knime-core-ui/org.knime.core.ui/js-src",
     "consola": "^3.4.0"
   },
   "devDependencies": {
