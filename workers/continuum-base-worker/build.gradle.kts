@@ -3,6 +3,7 @@ plugins {
     kotlin("plugin.spring") version "1.9.25"
     id("org.springframework.boot") version "3.4.0"
     id("io.spring.dependency-management") version "1.1.6"
+    id("com.google.cloud.tools.jib") version "3.4.0"
     `maven-publish`
 }
 
@@ -58,6 +59,19 @@ kotlin {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+}
+
+jib {
+    from {
+        image = "eclipse-temurin:21.0.8_9-jre"
+    }
+    to {
+        image = "elilillyco-continuum-docker-lc.jfrog.io/${project.name}:${project.version}"
+        auth {
+            username = System.getenv("MAVEN_REPO_USR")
+            password = System.getenv("MAVEN_REPO_PSW")
+        }
+    }
 }
 
 publishing {
