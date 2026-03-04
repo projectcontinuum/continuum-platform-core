@@ -221,6 +221,7 @@ This is the vision: **a marketplace of workers** — lightweight, independent, c
 - [ ] 🐛 Visual debugger with timeline replay
 - [ ] 👥 Multi-tenancy & RBAC
 - [ ] 🏗️ Multi-worker ecosystem — bring your own worker with custom nodes, auto-discovered via shared registry, zero downtime for others
+- [ ] 📒 Central node repository — a single registry where all workers publish their available nodes, making them discoverable and composable across the platform
 - [ ] ☸️ Helm chart — production-ready Kubernetes deployment for horizontal scaling
 - [ ] 📦 Zero-config self-host with `docker compose up`
 
