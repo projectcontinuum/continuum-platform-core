@@ -172,6 +172,38 @@ yarn start:workbench
 
 ---
 
+## 🧩 Architecture Philosophy: Workers, Not Monoliths
+
+> **Don't bloat. Distribute.**
+
+Most workflow engines pack every capability into a single worker — and when it breaks, everything breaks.
+
+Continuum takes a different path:
+
+- **One worker = one set of capabilities.** A worker that handles REST calls doesn't need to know about chemistry or AI training.
+- **Add capabilities by adding workers — not by inflating existing ones.** Need RDKit nodes? Spin up an RDKit worker. Need Unsloth? That's its own worker. The core stays untouched.
+- **Zero downtime for everyone else.** Deploy, update, or crash a worker — other workers keep running. No shared fate.
+- **Anyone can host a worker.** You can write and run your own worker offering custom nodes — plug it into the shared registry, and the platform discovers it automatically.
+
+```
+┌────────────┐  ┌────────────┐  ┌────────────┐  ┌──────────────┐
+│ Base Worker │  │  AI Worker │  │ Chem Worker │  │ Your Worker  │
+│  REST, CSV  │  │  Unsloth   │  │   RDKit    │  │  Anything!   │
+│  Transform  │  │  Inference │  │  Molecules │  │  Your nodes  │
+└─────┬──────┘  └─────┬──────┘  └─────┬──────┘  └──────┬───────┘
+      │               │               │                 │
+      └───────────────┴───────┬───────┴─────────────────┘
+                              ▼
+                    ┌──────────────────┐
+                    │  Shared Registry  │
+                    │  (Auto-discovery) │
+                    └──────────────────┘
+```
+
+This is the vision: **a marketplace of workers** — lightweight, independent, community-driven.
+
+---
+
 ## 🗺️ Roadmap
 
 - [x] Drag-and-drop visual workflow editor
@@ -188,7 +220,8 @@ yarn start:workbench
 - [ ] 🙋 Human-in-the-loop — interactive workflows with approval gates, manual review steps, and pause/resume
 - [ ] 🐛 Visual debugger with timeline replay
 - [ ] 👥 Multi-tenancy & RBAC
-- [ ] 🏗️ Multi-worker support — each plugin runs its own worker, all discovered via shared registry
+- [ ] 🏗️ Multi-worker ecosystem — bring your own worker with custom nodes, auto-discovered via shared registry, zero downtime for others
+- [ ] ☸️ Helm chart — production-ready Kubernetes deployment for horizontal scaling
 - [ ] 📦 Zero-config self-host with `docker compose up`
 
 ---
