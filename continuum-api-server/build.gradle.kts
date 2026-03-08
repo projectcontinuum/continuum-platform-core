@@ -126,8 +126,7 @@ jib {
 
 signing {
     val signingKeyId = System.getenv("GPG_KEY_ID")
-    val signingKeyBase64 = System.getenv("GPG_KEY_BASE64")
-    val signingKey: String? = signingKeyBase64?.let { String(Base64.getDecoder().decode(it)) }
+    val signingKey = System.getenv("GPG_KEY_BASE64")
     val signingPassword = System.getenv("GPG_KEY_PASSWORD")
     isRequired = !signingKey.isNullOrBlank()
     if (isRequired) {
