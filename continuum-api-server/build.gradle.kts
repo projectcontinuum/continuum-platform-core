@@ -124,9 +124,9 @@ jib {
 
 signing {
     // Use in-memory key from env vars (set via ORG_GRADLE_PROJECT_ prefix)
-    val signingKeyId: String = System.getenv("SIGNING_KEY_ID") ?: ""
-    val signingKey: String = System.getenv("SIGNING_KEY") ?: ""
-    val signingPassword: String = System.getenv("SIGNING_PASSWORD") ?: ""
+    val signingKeyId: String = System.getenv("GPG_KEY_ID") ?: ""
+    val signingKey: String = System.getenv("GPG_KEY_BASE64") ?: ""
+    val signingPassword: String = System.getenv("GPG_KEY_PASSWORD") ?: ""
     useInMemoryPgpKeys(signingKeyId, signingKey, signingPassword)
     sign(publishing.publications["mavenJava"])
 }
