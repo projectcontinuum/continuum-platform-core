@@ -5,7 +5,7 @@ plugins {
     `maven-publish`
 }
 
-group = "com.continuum.core"
+group = "org.projectcontinuum.core"
 val baseVersion = properties["platformVersion"].toString()
 val isRelease = System.getenv("IS_RELEASE_BUILD")?.toBoolean() ?: false
 version = if (isRelease) baseVersion else "$baseVersion-SNAPSHOT"

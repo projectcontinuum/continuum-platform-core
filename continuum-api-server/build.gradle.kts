@@ -7,7 +7,7 @@ plugins {
     id("com.google.cloud.tools.jib") version "3.4.1"
 }
 
-group = "com.continuum.core"
+group = "org.projectcontinuum.core"
 val baseVersion = property("platformVersion").toString()
 val isRelease = System.getenv("IS_RELEASE_BUILD")?.toBoolean() ?: false
 version = if (isRelease) baseVersion else "$baseVersion-SNAPSHOT"

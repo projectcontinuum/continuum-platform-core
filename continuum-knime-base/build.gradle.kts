@@ -4,7 +4,7 @@ plugins {
     `maven-publish`
 }
 
-group = "com.continuum.knime"
+group = "org.projectcontinuum.knime"
 val baseVersion = properties["platformVersion"].toString()
 val isRelease = System.getenv("IS_RELEASE_BUILD")?.toBoolean() ?: false
 version = if (isRelease) baseVersion else "$baseVersion-SNAPSHOT"
