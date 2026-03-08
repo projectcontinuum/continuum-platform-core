@@ -27,3 +27,6 @@ jobs:
     with:
       module-name: ${{ github.event.inputs.module }}
       release: ${{ github.event.inputs.release == 'true' }}
+    secrets:
+      DOCKER_HUB_USERNAME: ${{ secrets.DOCKER_HUB_USERNAME }}
+      DOCKER_HUB_PASSWORD: ${{ secrets.DOCKER_HUB_PASSWORD }}
