@@ -169,8 +169,8 @@ jreleaser {
                     url.set("https://central.sonatype.com/repository/maven-snapshots/")
                     snapshotSupported.set(true)
                     credentials {
-                        username = System.getenv("MAVEN_REPO_USERNAME") ?: ""
-                        password = System.getenv("MAVEN_REPO_PASSWORD") ?: ""
+                        username = System.getenv("JRELEASER_MAVENCENTRAL_SONATYPE_USERNAME") ?: ""
+                        password = System.getenv("JRELEASER_MAVENCENTRAL_SONATYPE_TOKEN") ?: ""
                     }
                     // No signing block — snapshots are typically unsigned (optional if you duplicate signing)
                 }

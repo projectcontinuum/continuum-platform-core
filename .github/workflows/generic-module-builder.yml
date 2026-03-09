@@ -98,8 +98,6 @@ jobs:
           fi
         env:
           IS_RELEASE_BUILD: ${{ inputs.release }}
-          MAVEN_REPO_USERNAME: ${{ secrets.MAVEN_REPO_USERNAME }}
-          MAVEN_REPO_PASSWORD: ${{ secrets.MAVEN_REPO_PASSWORD }}
 
       - name: Deploy to Maven Central via JReleaser
         if: inputs.publish_to_maven
