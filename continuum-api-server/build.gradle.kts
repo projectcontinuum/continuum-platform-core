@@ -161,6 +161,20 @@ jreleaser {
                     maxRetries.set(0)
                 }
             }
+
+            // Snapshots → direct upload via nexus2 deployer
+            nexus2 {
+                create("sonatypeSnapshots") {
+                    active.set(org.jreleaser.model.Active.SNAPSHOT)  // only for -SNAPSHOT versions
+                    url.set("https://central.sonatype.com/repository/maven-snapshots/")
+                    snapshotSupported.set(true)
+                    credentials {
+                        username = System.getenv("MAVEN_REPO_USERNAME") ?: ""
+                        password = System.getenv("MAVEN_REPO_PASSWORD") ?: ""
+                    }
+                    // No signing block — snapshots are typically unsigned (optional if you duplicate signing)
+                }
+            }
         }
     }
 }
