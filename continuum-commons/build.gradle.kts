@@ -134,6 +134,7 @@ jreleaser {
                     active.set(org.jreleaser.model.Active.ALWAYS)
                     url.set("https://central.sonatype.com/api/v1/publisher")
                     stagingRepository("build/staging-deploy")
+                    skipPublicationCheck.set(false)
                     retryDelay.set(0)
                     maxRetries.set(0)
                 }
