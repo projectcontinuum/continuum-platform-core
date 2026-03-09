@@ -3,7 +3,7 @@ plugins {
     kotlin("plugin.spring") version "1.9.25"
     id("io.spring.dependency-management") version "1.1.6"
     `maven-publish`
-    id("org.jreleaser") version "1.23.0"
+    id("org.jreleaser")
 }
 
 group = "org.projectcontinuum.core"

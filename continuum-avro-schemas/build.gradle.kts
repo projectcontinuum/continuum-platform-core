@@ -2,7 +2,7 @@ plugins {
     id("java-library")
     id("com.github.davidmc24.gradle.plugin.avro") version "1.9.1"
     `maven-publish`
-    id("org.jreleaser") version "1.23.0"
+    id("org.jreleaser")
 }
 
 group = "org.projectcontinuum.core"
