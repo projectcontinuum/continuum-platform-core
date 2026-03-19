@@ -1,19 +1,22 @@
 package org.projectcontinuum.core.bridge.handler
 
-import org.projectcontinuum.core.commons.model.WorkflowUpdateEvent
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.eclipse.paho.client.mqttv3.MqttClient
 import org.eclipse.paho.client.mqttv3.MqttMessage
+import org.projectcontinuum.core.bridge.repository.WorkflowRunRepository
+import org.projectcontinuum.core.commons.model.WorkflowUpdateEvent
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Bean
 import org.springframework.kafka.support.KafkaHeaders
 import org.springframework.messaging.Message
 import org.springframework.stereotype.Component
+import java.time.Instant
 import java.util.function.Consumer
 
 @Component
 class WorkflowExecutionSnapshotHandler(
-  private val mqttClient: MqttClient
+  private val mqttClient: MqttClient,
+  private val workflowRunRepository: WorkflowRunRepository
 ) {
 
   companion object {
@@ -45,6 +48,19 @@ class WorkflowExecutionSnapshotHandler(
     mqttClient.publish(
       "$MQTT_TOPIC_PREFIX/$workflowId/update",
       mqttMessage
+    )
+    workflowRunRepository.upsert(
+        workflowId = workflowId,
+        ownedBy = "",
+        status = message.payload.data.status,
+        data = objectMapper.writeValueAsString(
+          mapOf(
+            "workflowSnapshot" to message.payload.data.workflow,
+            "nodeToOutputMap" to message.payload.data.nodeToOutputsMap
+          )
+        ),
+        createdAt = Instant.now(),
+        updatedAt = Instant.now()
     )
   }
 }
