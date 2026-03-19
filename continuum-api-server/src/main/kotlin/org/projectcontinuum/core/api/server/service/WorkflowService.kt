@@ -75,12 +75,11 @@ class WorkflowService(
         workflowId = workflowId,
         ownedBy = ownedBy,
         status = "PENDING",
-        data = objectMapper.convertValue(
+        data = objectMapper.valueToTree(
           mapOf(
             "workflowSnapshot" to continuumWorkflowModel,
             "nodeToOutputMap" to emptyMap<String, Any>()
-          ),
-          object : TypeReference<Map<String, Any>>() {}
+          )
         )
       )
     )

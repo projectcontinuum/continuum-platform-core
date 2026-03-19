@@ -1,5 +1,7 @@
 package org.projectcontinuum.core.api.server.entity.jpa
 
+import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import io.hypersistence.utils.hibernate.type.json.JsonType
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
@@ -24,7 +26,7 @@ class WorkflowRunEntity(
 
     @Type(JsonType::class)
     @Column(name = "data", columnDefinition = "jsonb", nullable = false)
-    var data: Map<String, Any> = emptyMap(),
+    var data: JsonNode = JsonNodeFactory.instance.objectNode(),
 
     @Column(name = "created_at", nullable = false)
     val createdAt: Instant = Instant.now(),
