@@ -24,5 +24,5 @@ interface WorkflowRunRepository: CrudRepository<WorkflowRunEntity, UUID> {
     data: String,
     createdAt: Instant,
     updatedAt: Instant
-  ): WorkflowRunEntity
+  ): Int
 }
