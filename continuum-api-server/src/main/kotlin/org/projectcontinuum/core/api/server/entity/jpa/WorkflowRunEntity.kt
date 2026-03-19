@@ -21,6 +21,9 @@ class WorkflowRunEntity(
     @Column(name = "owned_by", nullable = false)
     val ownedBy: String,
 
+    @Column(name = "progress_percentage", nullable = false)
+    val progressPercentage: Int = 0,
+
     @Column(name = "status", nullable = false)
     var status: String = "PENDING",
 

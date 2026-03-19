@@ -10,19 +10,18 @@ import java.time.Instant
 interface WorkflowRunRepository: CrudRepository<WorkflowRunEntity, UUID> {
   @Modifying
   @Query("""
-    INSERT INTO workflow_runs (workflow_id, owned_by, status, data, created_at, updated_at)
-    VALUES (CAST(:workflowId AS UUID), :ownedBy, :status, CAST(:data AS JSONB), :createdAt, :updatedAt)
-    ON CONFLICT (workflow_id) DO UPDATE SET
+    UPDATE workflow_runs  SET
+      progress_percentage = :progressPercentage ,
       status = :status,
       data = CAST(:data AS JSONB),
       updated_at = :updatedAt
+    WHERE workflow_id = CAST(:workflowId AS UUID);
   """)
   fun upsert(
     workflowId: String,
-    ownedBy: String,
+    progressPercentage: Int,
     status: String,
     data: String,
-    createdAt: Instant,
     updatedAt: Instant
   ): Int
 }

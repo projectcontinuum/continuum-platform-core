@@ -43,7 +43,7 @@ class WorkflowExecutionSnapshotToDbSyncHandler(
     val workflowId = message.headers[KafkaHeaders.RECEIVED_KEY] as String
     workflowRunRepository.upsert(
       workflowId = workflowId,
-      ownedBy = "",
+      progressPercentage = message.payload.data.progressPercentage,
       status = message.payload.data.status,
       data = objectMapper.writeValueAsString(
         mapOf(
@@ -51,7 +51,6 @@ class WorkflowExecutionSnapshotToDbSyncHandler(
           "nodeToOutputMap" to message.payload.data.nodeToOutputsMap
         )
       ),
-      createdAt = Instant.now(),
       updatedAt = Instant.now()
     )
   }

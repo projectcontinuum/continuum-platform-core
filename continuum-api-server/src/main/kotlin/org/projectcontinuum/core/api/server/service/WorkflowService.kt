@@ -74,6 +74,7 @@ class WorkflowService(
       WorkflowRunEntity(
         workflowId = workflowId,
         ownedBy = ownedBy,
+        progressPercentage = 0,
         status = "PENDING",
         data = objectMapper.valueToTree(
           mapOf(
