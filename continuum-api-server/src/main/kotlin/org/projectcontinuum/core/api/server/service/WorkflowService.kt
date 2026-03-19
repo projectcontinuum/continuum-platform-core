@@ -1,6 +1,8 @@
 package org.projectcontinuum.core.api.server.service
 
 import org.projectcontinuum.core.api.server.model.WorkflowStatus
+import org.projectcontinuum.core.api.server.repository.jpa.WorkflowRunRepository
+import org.projectcontinuum.core.api.server.entity.jpa.WorkflowRunEntity
 import org.projectcontinuum.core.api.server.utils.TreeHelper
 import org.projectcontinuum.core.commons.constant.TaskQueues
 import org.projectcontinuum.core.commons.model.ContinuumWorkflowModel
@@ -24,20 +26,23 @@ import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.EnableScheduling
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.util.UUID
 
 @Service
 @EnableScheduling
 class WorkflowService(
-  val workflowClient: WorkflowClient
+  val workflowClient: WorkflowClient,
+  val workflowRunRepository: WorkflowRunRepository,
+  val objectMapper: ObjectMapper
 ) {
 
   companion object {
     private val LOGGER = LoggerFactory.getLogger(WorkflowService::class.java)
-    private val objectMapper: ObjectMapper = ObjectMapper()
   }
 
   fun startWorkflow(
-    continuumWorkflowModel: ContinuumWorkflowModel
+    continuumWorkflowModel: ContinuumWorkflowModel,
+    ownedBy: String
   ): String {
 
     // Validate the workflow model
@@ -48,9 +53,12 @@ class WorkflowService(
       )
     }
 
+    val workflowId = UUID.randomUUID()
+
     val continuumWorkflow = workflowClient.newWorkflowStub(
       IContinuumWorkflow::class.java,
       WorkflowOptions.newBuilder()
+        .setWorkflowId(workflowId.toString())
         .setTaskQueue(TaskQueues.WORKFLOW_TASK_QUEUE)
         .setTypedSearchAttributes(
           SearchAttributes.newBuilder()
@@ -60,6 +68,23 @@ class WorkflowService(
         )
         .build()
     )
+
+    // Save workflow run to database before starting Temporal execution
+    workflowRunRepository.save(
+      WorkflowRunEntity(
+        workflowId = workflowId,
+        ownedBy = ownedBy,
+        status = "PENDING",
+        data = objectMapper.convertValue(
+          mapOf(
+            "workflowSnapshot" to continuumWorkflowModel,
+            "nodeToOutputMap" to emptyMap<String, Any>()
+          ),
+          object : TypeReference<Map<String, Any>>() {}
+        )
+      )
+    )
+
     val workflowExecution: WorkflowExecution = WorkflowClient.start(
       continuumWorkflow::start,
       continuumWorkflowModel

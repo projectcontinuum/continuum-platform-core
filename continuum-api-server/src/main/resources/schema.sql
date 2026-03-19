@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS workflow_runs (
+    workflow_id     UUID PRIMARY KEY,
+    owned_by        VARCHAR(255) NOT NULL,
+    status          VARCHAR(50)  NOT NULL DEFAULT 'PENDING',
+    data            JSONB        NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMP    NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP    NOT NULL DEFAULT NOW()
+);
