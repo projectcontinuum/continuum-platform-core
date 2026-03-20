@@ -25,6 +25,7 @@ import io.temporal.common.SearchAttributes
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.EnableScheduling
 import org.springframework.stereotype.Service
+import java.net.URI
 import java.time.Instant
 import java.util.UUID
 
@@ -74,6 +75,7 @@ class WorkflowService(
       WorkflowRunEntity(
         workflowId = workflowId,
         ownedBy = ownedBy,
+        workflowUri = URI.create(continuumWorkflowModel.name),
         progressPercentage = 0,
         status = "PENDING",
         data = objectMapper.valueToTree(

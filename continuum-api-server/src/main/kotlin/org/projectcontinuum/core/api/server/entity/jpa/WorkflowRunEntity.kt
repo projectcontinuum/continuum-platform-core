@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
 import io.hypersistence.utils.hibernate.type.json.JsonType
 import jakarta.persistence.Column
+import jakarta.persistence.Convert
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
 import jakarta.persistence.Table
 import org.hibernate.annotations.Type
+import java.net.URI
 import java.time.Instant
 import java.util.UUID
 
@@ -20,6 +22,10 @@ class WorkflowRunEntity(
 
     @Column(name = "owned_by", nullable = false)
     val ownedBy: String,
+
+    @Column(name = "workflow_uri", nullable = false, columnDefinition = "VARCHAR(2048)")
+    @Convert(converter = UriAttributeConverter::class)
+    val workflowUri: URI,
 
     @Column(name = "progress_percentage", nullable = false)
     val progressPercentage: Int = 0,
