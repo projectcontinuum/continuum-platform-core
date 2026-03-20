@@ -20,6 +20,9 @@ class WorkflowRunEntity(
     @Column(name = "workflow_id")
     val workflowId: UUID,
 
+    @Column(name = "workflow_type", nullable = false)
+    val workflowType: String,
+
     @Column(name = "owned_by", nullable = false)
     val ownedBy: String,
 

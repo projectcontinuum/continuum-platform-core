@@ -74,6 +74,7 @@ class WorkflowService(
     workflowRunRepository.save(
       WorkflowRunEntity(
         workflowId = workflowId,
+        workflowType = IContinuumWorkflow::class.simpleName!!,
         ownedBy = ownedBy,
         workflowUri = URI.create(continuumWorkflowModel.name),
         progressPercentage = 0,
