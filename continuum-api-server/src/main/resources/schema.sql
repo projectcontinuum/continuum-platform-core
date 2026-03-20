@@ -6,6 +6,6 @@ CREATE TABLE IF NOT EXISTS workflow_runs (
     progress_percentage INT       NOT NULL DEFAULT 0,
     status          VARCHAR(50)  NOT NULL DEFAULT 'PENDING',
     data            JSONB        NOT NULL DEFAULT '{}',
-    created_at      TIMESTAMP    NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMP    NOT NULL DEFAULT NOW()
+    created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
