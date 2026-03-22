@@ -1,5 +1,6 @@
 plugins {
     kotlin("jvm") version "2.1.0"
+    `java-library`
     id("io.spring.dependency-management") version "1.1.6"
     `maven-publish`
     id("org.jreleaser")
@@ -36,11 +37,21 @@ dependencies {
     // Jackson dependencies
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.18.2")
 
-    // Parquet writer
-    implementation("org.apache.avro:avro:1.12.1")
-    implementation("org.apache.parquet:parquet-avro:1.17.0")
-    implementation("org.apache.hadoop:hadoop-common:3.4.3")
-    implementation("org.apache.hadoop:hadoop-mapreduce-client-core:3.4.3")
+    // Parquet writer — exposed via NodeOutputWriter/NodeInputReader public API
+    api("org.apache.avro:avro:1.12.1")
+    api("org.apache.parquet:parquet-avro:1.17.0")
+    api("org.apache.hadoop:hadoop-common:3.4.3") {
+        exclude(group = "org.slf4j", module = "slf4j-reload4j")
+        exclude(group = "org.slf4j", module = "slf4j-log4j12")
+        exclude(group = "log4j", module = "log4j")
+        exclude(group = "ch.qos.reload4j", module = "reload4j")
+    }
+    api("org.apache.hadoop:hadoop-mapreduce-client-core:3.4.3") {
+        exclude(group = "org.slf4j", module = "slf4j-reload4j")
+        exclude(group = "org.slf4j", module = "slf4j-log4j12")
+        exclude(group = "log4j", module = "log4j")
+        exclude(group = "ch.qos.reload4j", module = "reload4j")
+    }
 
     // Project dependencies
     implementation(project(":continuum-avro-schemas"))
