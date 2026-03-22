@@ -38,9 +38,9 @@ dependencies {
 
     // Parquet writer
     implementation("org.apache.avro:avro:1.12.1")
-    implementation("org.apache.parquet:parquet-avro:1.15.0")
-    implementation("org.apache.hadoop:hadoop-common:3.4.1")
-    implementation("org.apache.hadoop:hadoop-mapreduce-client-core:3.3.1")
+    implementation("org.apache.parquet:parquet-avro:1.17.0")
+    implementation("org.apache.hadoop:hadoop-common:3.4.3")
+    implementation("org.apache.hadoop:hadoop-mapreduce-client-core:3.4.3")
 
     // Project dependencies
     implementation(project(":continuum-avro-schemas"))
