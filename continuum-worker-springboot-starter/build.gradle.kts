@@ -8,9 +8,7 @@ plugins {
 
 group = "org.projectcontinuum.core"
 description = "Continuum Worker Spring Boot Starter — auto-registers nodes with Temporal and handles execution lifecycle"
-val baseVersion = properties["platformVersion"].toString()
-val isRelease = System.getenv("IS_RELEASE_BUILD")?.toBoolean() ?: false
-version = if (isRelease) baseVersion else "$baseVersion-SNAPSHOT"
+version = property("platformVersion").toString()
 
 java {
     toolchain {

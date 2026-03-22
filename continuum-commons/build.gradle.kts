@@ -7,9 +7,7 @@ plugins {
 
 group = "org.projectcontinuum.core"
 description = "Continuum Commons — shared base classes, data types, and Parquet/S3 utilities"
-val baseVersion = properties["platformVersion"].toString()
-val isRelease = System.getenv("IS_RELEASE_BUILD")?.toBoolean() ?: false
-version = if (isRelease) baseVersion else "$baseVersion-SNAPSHOT"
+version = property("platformVersion").toString()
 
 java {
     toolchain {
@@ -23,6 +21,14 @@ repositories {
     mavenCentral()
 }
 
+configurations.all {
+  resolutionStrategy {
+    dependencySubstitution {
+      substitute(module("org.glassfish.jaxb:jaxb-core"))
+    }
+  }
+}
+
 dependencies {
     // Jakarta annotations
     implementation("jakarta.annotation:jakarta.annotation-api:2.1.1")
@@ -32,7 +38,9 @@ dependencies {
 
     // Parquet writer
     implementation("org.apache.avro:avro:1.12.1")
-    implementation("org.apache.parquet:parquet-avro:1.17.0")
+    implementation("org.apache.parquet:parquet-avro:1.15.0")
+    implementation("org.apache.hadoop:hadoop-common:3.4.1")
+    implementation("org.apache.hadoop:hadoop-mapreduce-client-core:3.3.1")
 
     // Project dependencies
     implementation(project(":continuum-avro-schemas"))
