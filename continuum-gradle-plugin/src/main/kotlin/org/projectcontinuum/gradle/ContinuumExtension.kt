@@ -25,9 +25,6 @@ abstract class ContinuumExtension {
     /** AWS SDK BOM version */
     abstract val awsSdkVersion: Property<String>
 
-    /** Hadoop version (needed by Parquet at runtime) */
-    abstract val hadoopVersion: Property<String>
-
     /** Jackson module version */
     abstract val jacksonVersion: Property<String>
 

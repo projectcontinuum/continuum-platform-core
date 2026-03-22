@@ -22,14 +22,6 @@ repositories {
     mavenCentral()
 }
 
-configurations.all {
-  resolutionStrategy {
-    dependencySubstitution {
-      substitute(module("org.glassfish.jaxb:jaxb-core"))
-    }
-  }
-}
-
 dependencies {
     // Jakarta annotations
     implementation("jakarta.annotation:jakarta.annotation-api:2.1.1")
@@ -45,12 +37,14 @@ dependencies {
         exclude(group = "org.slf4j", module = "slf4j-log4j12")
         exclude(group = "log4j", module = "log4j")
         exclude(group = "ch.qos.reload4j", module = "reload4j")
+        exclude(group = "com.sun.xml.bind", module = "jaxb-impl")
     }
     implementation("org.apache.hadoop:hadoop-mapreduce-client-core:3.4.3") {
         exclude(group = "org.slf4j", module = "slf4j-reload4j")
         exclude(group = "org.slf4j", module = "slf4j-log4j12")
         exclude(group = "log4j", module = "log4j")
         exclude(group = "ch.qos.reload4j", module = "reload4j")
+        exclude(group = "com.sun.xml.bind", module = "jaxb-impl")
     }
 
     // Project dependencies

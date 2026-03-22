@@ -30,7 +30,6 @@ object ContinuumFeatureBase {
     const val DEFAULT_TEMPORAL_VERSION = "1.28.0"
     const val DEFAULT_AWS_SDK_VERSION = "2.30.7"
     const val DEFAULT_JACKSON_VERSION = "2.18.2"
-    const val DEFAULT_HADOOP_VERSION = "3.4.3"
 
     /**
      * Creates and configures the shared ContinuumExtension if it doesn't already exist.
@@ -48,7 +47,6 @@ object ContinuumFeatureBase {
             temporalVersion.convention(DEFAULT_TEMPORAL_VERSION)
             awsSdkVersion.convention(DEFAULT_AWS_SDK_VERSION)
             jacksonVersion.convention(DEFAULT_JACKSON_VERSION)
-            hadoopVersion.convention(DEFAULT_HADOOP_VERSION)
             publishToMavenCentral.convention(true)
         }
     }
@@ -101,7 +99,7 @@ object ContinuumFeatureBase {
         val springBootVer = ext.springBootVersion.get()
         val temporalVer = ext.temporalVersion.get()
         val springCloudVer = ext.springCloudVersion.get()
-        val hadoopVer = ext.hadoopVersion.get()
+//        val hadoopVer = ext.hadoopVersion.get()
         val isKotlin = ext.useKotlin.get()
 
         // Import BOMs via Spring dependency management
@@ -120,22 +118,6 @@ object ContinuumFeatureBase {
             add("implementation", "org.springframework.boot:spring-boot-starter-web")
             add("implementation", "org.springframework.boot:spring-boot-starter-actuator")
             add("implementation", "$continuumGrp:continuum-commons:$continuumVer")
-
-            // Hadoop — required at runtime by Parquet (parquet-hadoop declares it as provided).
-            // Exclude Hadoop's logging stack to avoid clashing with Spring Boot's Logback.
-            listOf(
-                "org.apache.hadoop:hadoop-common:$hadoopVer",
-                "org.apache.hadoop:hadoop-mapreduce-client-core:$hadoopVer"
-            ).forEach { dep ->
-                add("implementation", dep) {
-                    (this as org.gradle.api.artifacts.ExternalModuleDependency).apply {
-                        exclude(group = "org.slf4j", module = "slf4j-reload4j")
-                        exclude(group = "org.slf4j", module = "slf4j-log4j12")
-                        exclude(group = "log4j", module = "log4j")
-                        exclude(group = "ch.qos.reload4j", module = "reload4j")
-                    }
-                }
-            }
 
             if (isKotlin) {
                 add("implementation", "org.jetbrains.kotlin:kotlin-reflect")
