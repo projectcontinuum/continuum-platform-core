@@ -17,6 +17,7 @@ on:
           - continuum-worker-springboot-starter
           - continuum-gradle-plugin
           - continuum-orchestration-service
+          - continuum-cluster-manager
       publish_to_maven:
         description: 'Publish artifacts to Maven Central'
         required: true
