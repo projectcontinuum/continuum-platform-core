@@ -632,4 +632,200 @@ class WorkbenchServiceTest {
       .withLabel("instance-id", created.instanceId.toString()).list().items
     assertEquals(1, services.size)
   }
+
+  // ── suspendWorkbench ────────────────────────────────────────────────
+
+  @Test
+  fun `suspendWorkbench sets status to SUSPENDED and removes deployment and service but keeps PVC`() {
+    val created = service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "suspend-wb"))
+    val instanceId = created.instanceId.toString()
+
+    // Verify all 3 resources exist before suspend
+    assertEquals(1, client.apps().deployments().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+    assertEquals(1, client.services().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+    assertEquals(1, client.persistentVolumeClaims().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+
+    val response = service.suspendWorkbench("user-1", "suspend-wb", null)
+
+    assertEquals(WorkbenchStatus.SUSPENDED.name, response.status)
+    assertEquals("suspend-wb", response.instanceName)
+
+    // Deployment and Service should be deleted
+    assertEquals(0, client.apps().deployments().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+    assertEquals(0, client.services().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+
+    // PVC should still exist
+    assertEquals(1, client.persistentVolumeClaims().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+  }
+
+  @Test
+  fun `suspendWorkbench persists SUSPENDED status in database`() {
+    val created = service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "suspend-persist-wb"))
+
+    service.suspendWorkbench("user-1", "suspend-persist-wb", null)
+
+    val entity = repository.findById(created.instanceId).get()
+    assertEquals(WorkbenchStatus.SUSPENDED.name, entity.status)
+  }
+
+  @Test
+  fun `suspendWorkbench throws WorkbenchNotFoundException for missing workbench`() {
+    assertThrows<WorkbenchNotFoundException> {
+      service.suspendWorkbench("user-1", "nonexistent", null)
+    }
+  }
+
+  @Test
+  fun `suspendWorkbench throws IllegalArgumentException when already suspended`() {
+    service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "already-suspended-wb"))
+    service.suspendWorkbench("user-1", "already-suspended-wb", null)
+
+    val exception = assertThrows<IllegalArgumentException> {
+      service.suspendWorkbench("user-1", "already-suspended-wb", null)
+    }
+    assertTrue(exception.message!!.contains("already suspended"))
+  }
+
+  @Test
+  fun `suspendWorkbench with namespace suspends correct workbench`() {
+    // Insert entities directly to bypass the duplicate name check
+    val devEntity = createSampleEntity(instanceName = "susp-ns-wb", namespace = "dev")
+    val prodEntity = createSampleEntity(instanceName = "susp-ns-wb", namespace = "prod", instanceId = UUID.randomUUID())
+    repository.save(devEntity)
+    repository.save(prodEntity)
+
+    val response = service.suspendWorkbench("user-1", "susp-ns-wb", "dev")
+
+    assertEquals(WorkbenchStatus.SUSPENDED.name, response.status)
+    assertEquals("dev", response.namespace)
+
+    // Prod workbench should not be suspended
+    val prodFromDb = repository.findById(prodEntity.instanceId).get()
+    assertNotEquals(WorkbenchStatus.SUSPENDED.name, prodFromDb.status)
+  }
+
+  @Test
+  fun `suspended workbenches still appear in list queries`() {
+    service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "active-wb"))
+    service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "to-suspend-wb"))
+
+    service.suspendWorkbench("user-1", "to-suspend-wb", null)
+
+    val workbenches = service.listWorkbenches("user-1", null)
+    assertEquals(2, workbenches.size)
+
+    val suspendedWb = workbenches.first { it.instanceName == "to-suspend-wb" }
+    assertEquals(WorkbenchStatus.SUSPENDED.name, suspendedWb.status)
+  }
+
+  // ── resumeWorkbench ─────────────────────────────────────────────────
+
+  @Test
+  fun `resumeWorkbench re-creates deployment and service and sets status to RUNNING`() {
+    val created = service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "resume-wb"))
+    val instanceId = created.instanceId.toString()
+
+    service.suspendWorkbench("user-1", "resume-wb", null)
+
+    // Verify deployment and service are gone after suspend
+    assertEquals(0, client.apps().deployments().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+    assertEquals(0, client.services().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+
+    val response = service.resumeWorkbench("user-1", "resume-wb", null)
+
+    assertEquals(WorkbenchStatus.RUNNING.name, response.status)
+    assertEquals("resume-wb", response.instanceName)
+
+    // Deployment and Service should be re-created
+    assertEquals(1, client.apps().deployments().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+    assertEquals(1, client.services().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+
+    // PVC should still exist
+    assertEquals(1, client.persistentVolumeClaims().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+  }
+
+  @Test
+  fun `resumeWorkbench persists RUNNING status in database`() {
+    val created = service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "resume-persist-wb"))
+    service.suspendWorkbench("user-1", "resume-persist-wb", null)
+
+    service.resumeWorkbench("user-1", "resume-persist-wb", null)
+
+    val entity = repository.findById(created.instanceId).get()
+    assertEquals(WorkbenchStatus.RUNNING.name, entity.status)
+  }
+
+  @Test
+  fun `resumeWorkbench throws WorkbenchNotFoundException for missing workbench`() {
+    assertThrows<WorkbenchNotFoundException> {
+      service.resumeWorkbench("user-1", "nonexistent", null)
+    }
+  }
+
+  @Test
+  fun `resumeWorkbench throws IllegalArgumentException when workbench is not suspended`() {
+    service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "running-wb"))
+
+    val exception = assertThrows<IllegalArgumentException> {
+      service.resumeWorkbench("user-1", "running-wb", null)
+    }
+    assertTrue(exception.message!!.contains("is not suspended"))
+  }
+
+  @Test
+  fun `resumeWorkbench with namespace resumes correct workbench`() {
+    // Insert entities directly to bypass duplicate name check
+    val devEntity = createSampleEntity(instanceName = "res-ns-wb", namespace = "dev", status = WorkbenchStatus.SUSPENDED.name)
+    val prodEntity = createSampleEntity(instanceName = "res-ns-wb", namespace = "prod", status = WorkbenchStatus.SUSPENDED.name, instanceId = UUID.randomUUID())
+    repository.save(devEntity)
+    repository.save(prodEntity)
+
+    val response = service.resumeWorkbench("user-1", "res-ns-wb", "dev")
+
+    assertEquals(WorkbenchStatus.RUNNING.name, response.status)
+    assertEquals("dev", response.namespace)
+
+    // Prod workbench should still be SUSPENDED
+    val prodFromDb = repository.findById(prodEntity.instanceId).get()
+    assertEquals(WorkbenchStatus.SUSPENDED.name, prodFromDb.status)
+  }
+
+  @Test
+  fun `full suspend and resume cycle preserves workbench data`() {
+    val customResources = ResourceSpec(
+      cpuRequest = "2",
+      cpuLimit = "4",
+      memoryRequest = "2Gi",
+      memoryLimit = "4Gi",
+      storageSize = "20Gi"
+    )
+    val created = service.createWorkbench("user-1", WorkbenchCreateRequest(
+      instanceName = "cycle-wb",
+      image = "theiaide/theia:custom",
+      resources = customResources
+    ))
+
+    service.suspendWorkbench("user-1", "cycle-wb", null)
+    val resumed = service.resumeWorkbench("user-1", "cycle-wb", null)
+
+    assertEquals(created.instanceId, resumed.instanceId)
+    assertEquals("theiaide/theia:custom", resumed.image)
+    assertEquals("2", resumed.resources.cpuRequest)
+    assertEquals("4", resumed.resources.cpuLimit)
+    assertEquals("2Gi", resumed.resources.memoryRequest)
+    assertEquals("4Gi", resumed.resources.memoryLimit)
+    assertEquals("20Gi", resumed.resources.storageSize)
+    assertEquals(WorkbenchStatus.RUNNING.name, resumed.status)
+  }
 }

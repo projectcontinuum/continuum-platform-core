@@ -444,4 +444,144 @@ class WorkbenchControllerTest {
 
     verify(workbenchService).updateWorkbench(eq("anonymous"), eq("my-workbench"), eq(null), any())
   }
+
+  // ── PUT /api/v1/workbench/{instanceName}/suspend ────────────────────
+
+  @Test
+  fun `PUT suspend returns 200 with suspended response`() {
+    val response = sampleResponse(status = WorkbenchStatus.SUSPENDED.name)
+    whenever(workbenchService.suspendWorkbench("user-1", "my-workbench", null)).thenReturn(response)
+
+    mockMvc.perform(
+      put("/api/v1/workbench/my-workbench/suspend")
+        .header("x-continuum-user-id", "user-1")
+    )
+      .andExpect(status().isOk)
+      .andExpect(jsonPath("$.instanceName").value("my-workbench"))
+      .andExpect(jsonPath("$.status").value("SUSPENDED"))
+  }
+
+  @Test
+  fun `PUT suspend with namespace param calls service with namespace`() {
+    val response = sampleResponse(status = WorkbenchStatus.SUSPENDED.name)
+    whenever(workbenchService.suspendWorkbench("user-1", "my-workbench", "staging")).thenReturn(response)
+
+    mockMvc.perform(
+      put("/api/v1/workbench/my-workbench/suspend")
+        .header("x-continuum-user-id", "user-1")
+        .param("namespace", "staging")
+    )
+      .andExpect(status().isOk)
+
+    verify(workbenchService).suspendWorkbench("user-1", "my-workbench", "staging")
+  }
+
+  @Test
+  fun `PUT suspend returns 404 when workbench not found`() {
+    whenever(workbenchService.suspendWorkbench("user-1", "missing", null))
+      .thenThrow(WorkbenchNotFoundException("Workbench 'missing' not found for user 'user-1'"))
+
+    mockMvc.perform(
+      put("/api/v1/workbench/missing/suspend")
+        .header("x-continuum-user-id", "user-1")
+    )
+      .andExpect(status().isNotFound)
+      .andExpect(jsonPath("$.error").exists())
+  }
+
+  @Test
+  fun `PUT suspend returns 400 when already suspended`() {
+    whenever(workbenchService.suspendWorkbench("user-1", "my-workbench", null))
+      .thenThrow(IllegalArgumentException("Workbench 'my-workbench' is already suspended"))
+
+    mockMvc.perform(
+      put("/api/v1/workbench/my-workbench/suspend")
+        .header("x-continuum-user-id", "user-1")
+    )
+      .andExpect(status().isBadRequest)
+      .andExpect(jsonPath("$.error").value("Workbench 'my-workbench' is already suspended"))
+  }
+
+  @Test
+  fun `PUT suspend without user-id header defaults to anonymous`() {
+    val response = sampleResponse(userId = "anonymous", status = WorkbenchStatus.SUSPENDED.name)
+    whenever(workbenchService.suspendWorkbench("anonymous", "my-workbench", null)).thenReturn(response)
+
+    mockMvc.perform(
+      put("/api/v1/workbench/my-workbench/suspend")
+    )
+      .andExpect(status().isOk)
+
+    verify(workbenchService).suspendWorkbench("anonymous", "my-workbench", null)
+  }
+
+  // ── PUT /api/v1/workbench/{instanceName}/resume ─────────────────────
+
+  @Test
+  fun `PUT resume returns 200 with running response`() {
+    val response = sampleResponse(status = WorkbenchStatus.RUNNING.name)
+    whenever(workbenchService.resumeWorkbench("user-1", "my-workbench", null)).thenReturn(response)
+
+    mockMvc.perform(
+      put("/api/v1/workbench/my-workbench/resume")
+        .header("x-continuum-user-id", "user-1")
+    )
+      .andExpect(status().isOk)
+      .andExpect(jsonPath("$.instanceName").value("my-workbench"))
+      .andExpect(jsonPath("$.status").value("RUNNING"))
+  }
+
+  @Test
+  fun `PUT resume with namespace param calls service with namespace`() {
+    val response = sampleResponse(status = WorkbenchStatus.RUNNING.name)
+    whenever(workbenchService.resumeWorkbench("user-1", "my-workbench", "staging")).thenReturn(response)
+
+    mockMvc.perform(
+      put("/api/v1/workbench/my-workbench/resume")
+        .header("x-continuum-user-id", "user-1")
+        .param("namespace", "staging")
+    )
+      .andExpect(status().isOk)
+
+    verify(workbenchService).resumeWorkbench("user-1", "my-workbench", "staging")
+  }
+
+  @Test
+  fun `PUT resume returns 404 when workbench not found`() {
+    whenever(workbenchService.resumeWorkbench("user-1", "missing", null))
+      .thenThrow(WorkbenchNotFoundException("Workbench 'missing' not found for user 'user-1'"))
+
+    mockMvc.perform(
+      put("/api/v1/workbench/missing/resume")
+        .header("x-continuum-user-id", "user-1")
+    )
+      .andExpect(status().isNotFound)
+      .andExpect(jsonPath("$.error").exists())
+  }
+
+  @Test
+  fun `PUT resume returns 400 when workbench is not suspended`() {
+    whenever(workbenchService.resumeWorkbench("user-1", "my-workbench", null))
+      .thenThrow(IllegalArgumentException("Workbench 'my-workbench' is not suspended"))
+
+    mockMvc.perform(
+      put("/api/v1/workbench/my-workbench/resume")
+        .header("x-continuum-user-id", "user-1")
+    )
+      .andExpect(status().isBadRequest)
+      .andExpect(jsonPath("$.error").value("Workbench 'my-workbench' is not suspended"))
+  }
+
+  @Test
+  fun `PUT resume without user-id header defaults to anonymous`() {
+    val response = sampleResponse(userId = "anonymous", status = WorkbenchStatus.RUNNING.name)
+    whenever(workbenchService.resumeWorkbench("anonymous", "my-workbench", null)).thenReturn(response)
+
+    mockMvc.perform(
+      put("/api/v1/workbench/my-workbench/resume")
+    )
+      .andExpect(status().isOk)
+
+    verify(workbenchService).resumeWorkbench("anonymous", "my-workbench", null)
+  }
 }

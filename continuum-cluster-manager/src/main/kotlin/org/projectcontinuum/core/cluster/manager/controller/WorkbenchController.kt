@@ -52,6 +52,26 @@ class WorkbenchController(
     return ResponseEntity.ok(response)
   }
 
+  @PutMapping("/{instanceName}/suspend")
+  fun suspendWorkbench(
+    @RequestHeader("x-continuum-user-id", required = false, defaultValue = "anonymous") userId: String,
+    @PathVariable instanceName: String,
+    @RequestParam(required = false) namespace: String?
+  ): ResponseEntity<WorkbenchResponse> {
+    val response = workbenchService.suspendWorkbench(userId, instanceName, namespace)
+    return ResponseEntity.ok(response)
+  }
+
+  @PutMapping("/{instanceName}/resume")
+  fun resumeWorkbench(
+    @RequestHeader("x-continuum-user-id", required = false, defaultValue = "anonymous") userId: String,
+    @PathVariable instanceName: String,
+    @RequestParam(required = false) namespace: String?
+  ): ResponseEntity<WorkbenchResponse> {
+    val response = workbenchService.resumeWorkbench(userId, instanceName, namespace)
+    return ResponseEntity.ok(response)
+  }
+
   @PutMapping("/{instanceName}")
   fun updateWorkbench(
     @RequestHeader("x-continuum-user-id", required = false, defaultValue = "anonymous") userId: String,

@@ -136,6 +136,67 @@ class WorkbenchService(
     return entities.map { toResponse(it) }
   }
 
+  fun suspendWorkbench(userId: String, instanceName: String, namespace: String?): WorkbenchResponse {
+    val entity = if (namespace != null) {
+      repository.findByUserId(userId)
+        .firstOrNull { it.instanceName == instanceName && it.namespace == namespace }
+    } else {
+      repository.findByUserIdAndInstanceName(userId, instanceName)
+    } ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+
+    if (entity.status == WorkbenchStatus.SUSPENDED.name) {
+      throw IllegalArgumentException("Workbench '$instanceName' is already suspended")
+    }
+
+    try {
+      suspendK8sResources(entity.instanceId.toString(), entity.namespace)
+    } catch (ex: Exception) {
+      logger.error("Failed to suspend K8s resources for workbench ${entity.instanceId}", ex)
+    }
+
+    val suspendedEntity = entity.copy(
+      status = WorkbenchStatus.SUSPENDED.name,
+      updatedAt = Instant.now()
+    )
+    repository.save(suspendedEntity)
+
+    return toResponse(suspendedEntity)
+  }
+
+  fun resumeWorkbench(userId: String, instanceName: String, namespace: String?): WorkbenchResponse {
+    val entity = if (namespace != null) {
+      repository.findByUserId(userId)
+        .firstOrNull { it.instanceName == instanceName && it.namespace == namespace }
+    } else {
+      repository.findByUserIdAndInstanceName(userId, instanceName)
+    } ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+
+    if (entity.status != WorkbenchStatus.SUSPENDED.name) {
+      throw IllegalArgumentException("Workbench '$instanceName' is not suspended")
+    }
+
+    val templateModel = buildTemplateModel(entity)
+
+    try {
+      val deploymentYaml = renderTemplate("deployment.ftl", templateModel)
+      applyYaml(deploymentYaml, entity.namespace)
+
+      val serviceYaml = renderTemplate("service.ftl", templateModel)
+      applyYaml(serviceYaml, entity.namespace)
+    } catch (ex: Exception) {
+      logger.error("Failed to resume K8s resources for workbench ${entity.instanceId}", ex)
+      throw ex
+    }
+
+    val resumedEntity = entity.copy(
+      status = WorkbenchStatus.RUNNING.name,
+      updatedAt = Instant.now()
+    )
+    repository.save(resumedEntity)
+
+    return toResponse(resumedEntity)
+  }
+
   fun updateWorkbench(userId: String, instanceName: String, namespace: String?, request: WorkbenchUpdateRequest): WorkbenchResponse {
     val entity = if (namespace != null) {
       repository.findByUserId(userId)
@@ -207,6 +268,19 @@ class WorkbenchService(
     kubernetesClient.services()
       .inNamespace(namespace).withLabels(labels).delete()
     kubernetesClient.persistentVolumeClaims()
+      .inNamespace(namespace).withLabels(labels).delete()
+  }
+
+  private fun suspendK8sResources(instanceId: String, namespace: String) {
+    val labels = mapOf(
+      "instance-id" to instanceId,
+      "app" to "continuum-workbench",
+      "managed-by" to "continuum-cluster-manager"
+    )
+
+    kubernetesClient.apps().deployments()
+      .inNamespace(namespace).withLabels(labels).delete()
+    kubernetesClient.services()
       .inNamespace(namespace).withLabels(labels).delete()
   }
 
