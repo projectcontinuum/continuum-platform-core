@@ -4,6 +4,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import freemarker.template.Configuration
 import io.fabric8.kubernetes.api.model.HasMetadata
 import io.fabric8.kubernetes.client.KubernetesClient
+import org.projectcontinuum.core.cluster.manager.config.WorkbenchProperties
 import org.projectcontinuum.core.cluster.manager.entity.WorkbenchInstanceEntity
 import org.projectcontinuum.core.cluster.manager.exception.WorkbenchNotFoundException
 import org.projectcontinuum.core.cluster.manager.model.*
@@ -21,7 +22,8 @@ class WorkbenchService(
   private val repository: WorkbenchInstanceRepository,
   private val kubernetesClient: KubernetesClient,
   private val freemarkerConfig: Configuration,
-  private val transactionTemplate: TransactionTemplate
+  private val transactionTemplate: TransactionTemplate,
+  private val workbenchProperties: WorkbenchProperties
 ) {
 
   private val logger = LoggerFactory.getLogger(WorkbenchService::class.java)
@@ -36,11 +38,12 @@ class WorkbenchService(
 
     val instanceId = UUID.randomUUID()
     val now = Instant.now()
+    val namespace = workbenchProperties.namespace
 
     val entity = WorkbenchInstanceEntity(
       instanceId = instanceId,
       instanceName = request.instanceName,
-      namespace = request.namespace,
+      namespace = namespace,
       userId = userId,
       status = WorkbenchStatus.PENDING.name,
       image = request.image,
@@ -60,15 +63,15 @@ class WorkbenchService(
     try {
       // First, create all K8s resources
       val pvcYaml = renderTemplate("pvc.ftl", templateModel)
-      applyYaml(pvcYaml, request.namespace)
+      applyYaml(pvcYaml, namespace)
       k8sResourceIds.add("persistentvolumeclaim/wb-${instanceId}-pvc")
 
       val deploymentYaml = renderTemplate("deployment.ftl", templateModel)
-      applyYaml(deploymentYaml, request.namespace)
+      applyYaml(deploymentYaml, namespace)
       k8sResourceIds.add("deployment/wb-${instanceId}-deployment")
 
       val serviceYaml = renderTemplate("service.ftl", templateModel)
-      applyYaml(serviceYaml, request.namespace)
+      applyYaml(serviceYaml, namespace)
       k8sResourceIds.add("service/wb-${instanceId}-svc")
 
       // Only save to DB after all K8s resources are successfully created
@@ -85,30 +88,22 @@ class WorkbenchService(
     } catch (ex: Exception) {
       logger.error("Failed to create K8s resources for workbench $instanceId, rolling back", ex)
       // Rollback K8s resources that were created
-      rollbackK8sResources(k8sResourceIds, request.namespace)
+      rollbackK8sResources(k8sResourceIds, namespace)
       throw ex
     }
   }
 
-  fun getWorkbenchStatus(userId: String, instanceName: String, namespace: String?): WorkbenchResponse {
-    val entity = if (namespace != null) {
-      repository.findByUserId(userId)
-        .firstOrNull { it.instanceName == instanceName && it.namespace == namespace }
-    } else {
-      repository.findByUserIdAndInstanceName(userId, instanceName)
-    } ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+  fun getWorkbenchStatus(userId: String, instanceName: String): WorkbenchResponse {
+    val entity = repository.findByUserIdAndInstanceName(userId, instanceName)
+      ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
 
     val refreshedEntity = refreshStatusFromK8s(entity)
     return toResponse(refreshedEntity)
   }
 
-  fun deleteWorkbench(userId: String, instanceName: String, namespace: String?) {
-    val entity = if (namespace != null) {
-      repository.findByUserId(userId)
-        .firstOrNull { it.instanceName == instanceName && it.namespace == namespace }
-    } else {
-      repository.findByUserIdAndInstanceName(userId, instanceName)
-    } ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+  fun deleteWorkbench(userId: String, instanceName: String) {
+    val entity = repository.findByUserIdAndInstanceName(userId, instanceName)
+      ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
 
     // First, delete K8s resources
     try {
@@ -129,22 +124,14 @@ class WorkbenchService(
   }
 
   @Transactional(readOnly = true)
-  fun listWorkbenches(userId: String, namespace: String?): List<WorkbenchResponse> {
-    val entities = if (namespace != null) {
-      repository.findByUserIdAndNamespace(userId, namespace)
-    } else {
-      repository.findByUserId(userId)
-    }
+  fun listWorkbenches(userId: String): List<WorkbenchResponse> {
+    val entities = repository.findByUserId(userId)
     return entities.map { toResponse(it) }
   }
 
-  fun suspendWorkbench(userId: String, instanceName: String, namespace: String?): WorkbenchResponse {
-    val entity = if (namespace != null) {
-      repository.findByUserId(userId)
-        .firstOrNull { it.instanceName == instanceName && it.namespace == namespace }
-    } else {
-      repository.findByUserIdAndInstanceName(userId, instanceName)
-    } ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+  fun suspendWorkbench(userId: String, instanceName: String): WorkbenchResponse {
+    val entity = repository.findByUserIdAndInstanceName(userId, instanceName)
+      ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
 
     if (entity.status == WorkbenchStatus.SUSPENDED.name) {
       throw IllegalArgumentException("Workbench '$instanceName' is already suspended")
@@ -170,13 +157,9 @@ class WorkbenchService(
     return toResponse(suspendedEntity)
   }
 
-  fun resumeWorkbench(userId: String, instanceName: String, namespace: String?): WorkbenchResponse {
-    val entity = if (namespace != null) {
-      repository.findByUserId(userId)
-        .firstOrNull { it.instanceName == instanceName && it.namespace == namespace }
-    } else {
-      repository.findByUserIdAndInstanceName(userId, instanceName)
-    } ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+  fun resumeWorkbench(userId: String, instanceName: String): WorkbenchResponse {
+    val entity = repository.findByUserIdAndInstanceName(userId, instanceName)
+      ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
 
     if (entity.status != WorkbenchStatus.SUSPENDED.name) {
       throw IllegalArgumentException("Workbench '$instanceName' is not suspended")
@@ -214,13 +197,9 @@ class WorkbenchService(
     return toResponse(resumedEntity)
   }
 
-  fun updateWorkbench(userId: String, instanceName: String, namespace: String?, request: WorkbenchUpdateRequest): WorkbenchResponse {
-    val entity = if (namespace != null) {
-      repository.findByUserId(userId)
-        .firstOrNull { it.instanceName == instanceName && it.namespace == namespace }
-    } else {
-      repository.findByUserIdAndInstanceName(userId, instanceName)
-    } ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+  fun updateWorkbench(userId: String, instanceName: String, request: WorkbenchUpdateRequest): WorkbenchResponse {
+    val entity = repository.findByUserIdAndInstanceName(userId, instanceName)
+      ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
 
     val updatedEntity = entity.copy(
       image = request.image ?: entity.image,

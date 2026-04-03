@@ -26,49 +26,44 @@ class WorkbenchController(
   @GetMapping("/{instanceName}")
   fun getWorkbenchStatus(
     @RequestHeader("x-continuum-user-id", required = false, defaultValue = "anonymous") userId: String,
-    @PathVariable instanceName: String,
-    @RequestParam(required = false) namespace: String?
+    @PathVariable instanceName: String
   ): ResponseEntity<WorkbenchResponse> {
-    val response = workbenchService.getWorkbenchStatus(userId, instanceName, namespace)
+    val response = workbenchService.getWorkbenchStatus(userId, instanceName)
     return ResponseEntity.ok(response)
   }
 
   @DeleteMapping("/{instanceName}")
   fun deleteWorkbench(
     @RequestHeader("x-continuum-user-id", required = false, defaultValue = "anonymous") userId: String,
-    @PathVariable instanceName: String,
-    @RequestParam(required = false) namespace: String?
+    @PathVariable instanceName: String
   ): ResponseEntity<Void> {
-    workbenchService.deleteWorkbench(userId, instanceName, namespace)
+    workbenchService.deleteWorkbench(userId, instanceName)
     return ResponseEntity.noContent().build()
   }
 
   @GetMapping
   fun listWorkbenches(
-    @RequestHeader("x-continuum-user-id", required = false, defaultValue = "anonymous") userId: String,
-    @RequestParam(required = false) namespace: String?
+    @RequestHeader("x-continuum-user-id", required = false, defaultValue = "anonymous") userId: String
   ): ResponseEntity<List<WorkbenchResponse>> {
-    val response = workbenchService.listWorkbenches(userId, namespace)
+    val response = workbenchService.listWorkbenches(userId)
     return ResponseEntity.ok(response)
   }
 
   @PutMapping("/{instanceName}/suspend")
   fun suspendWorkbench(
     @RequestHeader("x-continuum-user-id", required = false, defaultValue = "anonymous") userId: String,
-    @PathVariable instanceName: String,
-    @RequestParam(required = false) namespace: String?
+    @PathVariable instanceName: String
   ): ResponseEntity<WorkbenchResponse> {
-    val response = workbenchService.suspendWorkbench(userId, instanceName, namespace)
+    val response = workbenchService.suspendWorkbench(userId, instanceName)
     return ResponseEntity.ok(response)
   }
 
   @PutMapping("/{instanceName}/resume")
   fun resumeWorkbench(
     @RequestHeader("x-continuum-user-id", required = false, defaultValue = "anonymous") userId: String,
-    @PathVariable instanceName: String,
-    @RequestParam(required = false) namespace: String?
+    @PathVariable instanceName: String
   ): ResponseEntity<WorkbenchResponse> {
-    val response = workbenchService.resumeWorkbench(userId, instanceName, namespace)
+    val response = workbenchService.resumeWorkbench(userId, instanceName)
     return ResponseEntity.ok(response)
   }
 
@@ -76,10 +71,9 @@ class WorkbenchController(
   fun updateWorkbench(
     @RequestHeader("x-continuum-user-id", required = false, defaultValue = "anonymous") userId: String,
     @PathVariable instanceName: String,
-    @RequestParam(required = false) namespace: String?,
     @RequestBody request: WorkbenchUpdateRequest
   ): ResponseEntity<WorkbenchResponse> {
-    val response = workbenchService.updateWorkbench(userId, instanceName, namespace, request)
+    val response = workbenchService.updateWorkbench(userId, instanceName, request)
     return ResponseEntity.ok(response)
   }
 }

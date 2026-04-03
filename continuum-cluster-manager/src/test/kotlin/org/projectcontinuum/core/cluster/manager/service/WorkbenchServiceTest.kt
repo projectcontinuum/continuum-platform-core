@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.projectcontinuum.core.cluster.manager.config.WorkbenchProperties
 import org.projectcontinuum.core.cluster.manager.entity.WorkbenchInstanceEntity
 import org.projectcontinuum.core.cluster.manager.exception.WorkbenchNotFoundException
 import org.projectcontinuum.core.cluster.manager.model.*
@@ -36,6 +37,7 @@ class WorkbenchServiceTest {
   lateinit var server: KubernetesMockServer
 
   private lateinit var service: WorkbenchService
+  private lateinit var workbenchProperties: WorkbenchProperties
 
   @BeforeEach
   fun setUp() {
@@ -45,7 +47,12 @@ class WorkbenchServiceTest {
     freemarkerConfig.setClassLoaderForTemplateLoading(this::class.java.classLoader, "/templates")
     freemarkerConfig.defaultEncoding = "UTF-8"
 
-    service = WorkbenchService(repository, client, freemarkerConfig, transactionTemplate)
+    workbenchProperties = WorkbenchProperties(
+      defaultImage = "projectcontinuum/continuum-workbench:latest",
+      namespace = "default"
+    )
+
+    service = WorkbenchService(repository, client, freemarkerConfig, transactionTemplate, workbenchProperties)
   }
 
   private fun createSampleEntity(
@@ -74,7 +81,6 @@ class WorkbenchServiceTest {
   fun `createWorkbench saves entity and creates K8s resources`() {
     val request = WorkbenchCreateRequest(
       instanceName = "test-wb",
-      namespace = "default",
       resources = ResourceSpec(),
       image = "theiaide/theia:latest"
     )
@@ -127,7 +133,6 @@ class WorkbenchServiceTest {
     )
     val request = WorkbenchCreateRequest(
       instanceName = "custom-wb",
-      namespace = "custom-ns",
       resources = customResources,
       image = "theiaide/theia:custom"
     )
@@ -135,7 +140,7 @@ class WorkbenchServiceTest {
     val response = service.createWorkbench("user-1", request)
 
     assertEquals("custom-wb", response.instanceName)
-    assertEquals("custom-ns", response.namespace)
+    assertEquals("default", response.namespace) // Uses configured namespace
     assertEquals("theiaide/theia:custom", response.image)
     assertEquals("2", response.resources.cpuRequest)
     assertEquals("4", response.resources.cpuLimit)
@@ -171,10 +176,10 @@ class WorkbenchServiceTest {
 
   @Test
   fun `createWorkbench generates correct service endpoint format`() {
-    val request = WorkbenchCreateRequest(instanceName = "ep-wb", namespace = "staging")
+    val request = WorkbenchCreateRequest(instanceName = "ep-wb")
     val response = service.createWorkbench("user-1", request)
 
-    val expectedEndpoint = "wb-${response.instanceId}-svc.staging.svc.cluster.local:8080"
+    val expectedEndpoint = "wb-${response.instanceId}-svc.default.svc.cluster.local:8080"
     assertEquals(expectedEndpoint, response.serviceEndpoint)
   }
 
@@ -199,6 +204,14 @@ class WorkbenchServiceTest {
     assertFalse(entity.updatedAt.isBefore(beforeCreate))
   }
 
+  @Test
+  fun `createWorkbench uses configured namespace`() {
+    val request = WorkbenchCreateRequest(instanceName = "ns-test-wb")
+    val response = service.createWorkbench("user-1", request)
+
+    assertEquals(workbenchProperties.namespace, response.namespace)
+  }
+
   // ── getWorkbenchStatus ──────────────────────────────────────────────
 
   @Test
@@ -207,7 +220,7 @@ class WorkbenchServiceTest {
     val entity = createSampleEntity(instanceName = "status-wb", instanceId = instanceId)
     repository.save(entity)
 
-    val response = service.getWorkbenchStatus("user-1", "status-wb", null)
+    val response = service.getWorkbenchStatus("user-1", "status-wb")
 
     assertEquals("status-wb", response.instanceName)
     assertEquals("user-1", response.userId)
@@ -216,29 +229,7 @@ class WorkbenchServiceTest {
   @Test
   fun `getWorkbenchStatus throws WorkbenchNotFoundException for missing workbench`() {
     assertThrows<WorkbenchNotFoundException> {
-      service.getWorkbenchStatus("user-1", "nonexistent", null)
-    }
-  }
-
-  @Test
-  fun `getWorkbenchStatus with namespace finds correct workbench`() {
-    // Insert entities directly to bypass the duplicate name check
-    val devEntity = createSampleEntity(instanceName = "ns-wb", namespace = "dev")
-    val prodEntity = createSampleEntity(instanceName = "ns-wb", namespace = "prod", instanceId = UUID.randomUUID())
-    repository.save(devEntity)
-    repository.save(prodEntity)
-
-    val response = service.getWorkbenchStatus("user-1", "ns-wb", "dev")
-    assertEquals("ns-wb", response.instanceName)
-    assertEquals("dev", response.namespace)
-  }
-
-  @Test
-  fun `getWorkbenchStatus with namespace throws when not found in that namespace`() {
-    repository.save(createSampleEntity(instanceName = "ns-wb", namespace = "dev"))
-
-    assertThrows<WorkbenchNotFoundException> {
-      service.getWorkbenchStatus("user-1", "ns-wb", "staging")
+      service.getWorkbenchStatus("user-1", "nonexistent")
     }
   }
 
@@ -262,7 +253,7 @@ class WorkbenchServiceTest {
       .build()
     client.apps().deployments().inNamespace("default").resource(deployment).create()
 
-    val response = service.getWorkbenchStatus("user-1", "refresh-wb", null)
+    val response = service.getWorkbenchStatus("user-1", "refresh-wb")
     assertEquals(WorkbenchStatus.RUNNING.name, response.status)
   }
 
@@ -286,7 +277,7 @@ class WorkbenchServiceTest {
       .build()
     client.apps().deployments().inNamespace("default").resource(deployment).create()
 
-    val response = service.getWorkbenchStatus("user-1", "pending-wb", null)
+    val response = service.getWorkbenchStatus("user-1", "pending-wb")
     assertEquals(WorkbenchStatus.PENDING.name, response.status)
   }
 
@@ -301,7 +292,7 @@ class WorkbenchServiceTest {
     repository.save(entity)
 
     // No K8s deployment exists for this workbench
-    val response = service.getWorkbenchStatus("user-1", "unknown-wb", null)
+    val response = service.getWorkbenchStatus("user-1", "unknown-wb")
     assertEquals(WorkbenchStatus.UNKNOWN.name, response.status)
   }
 
@@ -317,7 +308,7 @@ class WorkbenchServiceTest {
     val versionAfterSave = repository.findById(instanceId).get().entityVersion
 
     // No deployment means UNKNOWN - same as current status
-    val response = service.getWorkbenchStatus("user-1", "unchanged-wb", null)
+    val response = service.getWorkbenchStatus("user-1", "unchanged-wb")
     assertEquals(WorkbenchStatus.UNKNOWN.name, response.status)
 
     // Verify entity version didn't change (no unnecessary save)
@@ -329,13 +320,10 @@ class WorkbenchServiceTest {
 
   @Test
   fun `deleteWorkbench soft-deletes DB record and removes K8s resources`() {
-    val request = WorkbenchCreateRequest(
-      instanceName = "delete-wb",
-      namespace = "default"
-    )
+    val request = WorkbenchCreateRequest(instanceName = "delete-wb")
     val created = service.createWorkbench("user-1", request)
 
-    service.deleteWorkbench("user-1", "delete-wb", null)
+    service.deleteWorkbench("user-1", "delete-wb")
 
     // Should not appear in active queries
     assertNull(repository.findByUserIdAndInstanceName("user-1", "delete-wb"))
@@ -353,35 +341,7 @@ class WorkbenchServiceTest {
   @Test
   fun `deleteWorkbench throws WorkbenchNotFoundException for missing workbench`() {
     assertThrows<WorkbenchNotFoundException> {
-      service.deleteWorkbench("user-1", "nonexistent", null)
-    }
-  }
-
-  @Test
-  fun `deleteWorkbench with namespace deletes correct workbench`() {
-    // Insert entities directly to bypass the duplicate name check in createWorkbench
-    val devEntity = createSampleEntity(instanceName = "del-ns-wb", namespace = "dev")
-    val prodEntity = createSampleEntity(instanceName = "del-ns-wb", namespace = "prod", instanceId = UUID.randomUUID())
-    repository.save(devEntity)
-    repository.save(prodEntity)
-
-    service.deleteWorkbench("user-1", "del-ns-wb", "dev")
-
-    // Dev workbench should be deleted
-    val devWorkbenches = service.listWorkbenches("user-1", "dev")
-    assertEquals(0, devWorkbenches.size)
-
-    // Prod workbench should still exist
-    val prodWorkbenches = service.listWorkbenches("user-1", "prod")
-    assertEquals(1, prodWorkbenches.size)
-  }
-
-  @Test
-  fun `deleteWorkbench with namespace throws when not found in that namespace`() {
-    service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "del-wb", namespace = "dev"))
-
-    assertThrows<WorkbenchNotFoundException> {
-      service.deleteWorkbench("user-1", "del-wb", "staging")
+      service.deleteWorkbench("user-1", "nonexistent")
     }
   }
 
@@ -398,7 +358,7 @@ class WorkbenchServiceTest {
     assertEquals(1, client.persistentVolumeClaims().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
 
-    service.deleteWorkbench("user-1", "full-del-wb", null)
+    service.deleteWorkbench("user-1", "full-del-wb")
 
     // Verify all resources are gone
     assertEquals(0, client.apps().deployments().inNamespace("default")
@@ -414,11 +374,11 @@ class WorkbenchServiceTest {
     service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "keep-wb"))
     service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "remove-wb"))
 
-    assertEquals(2, service.listWorkbenches("user-1", null).size)
+    assertEquals(2, service.listWorkbenches("user-1").size)
 
-    service.deleteWorkbench("user-1", "remove-wb", null)
+    service.deleteWorkbench("user-1", "remove-wb")
 
-    val remaining = service.listWorkbenches("user-1", null)
+    val remaining = service.listWorkbenches("user-1")
     assertEquals(1, remaining.size)
     assertEquals("keep-wb", remaining[0].instanceName)
   }
@@ -431,34 +391,16 @@ class WorkbenchServiceTest {
     service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "wb-2"))
     service.createWorkbench("user-2", WorkbenchCreateRequest(instanceName = "wb-3"))
 
-    val user1Workbenches = service.listWorkbenches("user-1", null)
+    val user1Workbenches = service.listWorkbenches("user-1")
     assertEquals(2, user1Workbenches.size)
 
-    val user2Workbenches = service.listWorkbenches("user-2", null)
+    val user2Workbenches = service.listWorkbenches("user-2")
     assertEquals(1, user2Workbenches.size)
   }
 
   @Test
-  fun `listWorkbenches filters by namespace`() {
-    service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "wb-dev", namespace = "dev"))
-    service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "wb-prod", namespace = "prod"))
-
-    val devWorkbenches = service.listWorkbenches("user-1", "dev")
-    assertEquals(1, devWorkbenches.size)
-    assertEquals("wb-dev", devWorkbenches[0].instanceName)
-  }
-
-  @Test
   fun `listWorkbenches returns empty list for unknown user`() {
-    val workbenches = service.listWorkbenches("unknown-user", null)
-    assertTrue(workbenches.isEmpty())
-  }
-
-  @Test
-  fun `listWorkbenches returns empty list for unknown namespace`() {
-    service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "wb-1", namespace = "dev"))
-
-    val workbenches = service.listWorkbenches("user-1", "nonexistent-ns")
+    val workbenches = service.listWorkbenches("unknown-user")
     assertTrue(workbenches.isEmpty())
   }
 
@@ -466,18 +408,17 @@ class WorkbenchServiceTest {
   fun `listWorkbenches returns correct data in responses`() {
     val request = WorkbenchCreateRequest(
       instanceName = "detail-wb",
-      namespace = "staging",
       image = "theiaide/theia:v2",
       resources = ResourceSpec(cpuRequest = "1", memoryRequest = "2Gi")
     )
     service.createWorkbench("user-1", request)
 
-    val results = service.listWorkbenches("user-1", null)
+    val results = service.listWorkbenches("user-1")
     assertEquals(1, results.size)
 
     val wb = results[0]
     assertEquals("detail-wb", wb.instanceName)
-    assertEquals("staging", wb.namespace)
+    assertEquals("default", wb.namespace)
     assertEquals("user-1", wb.userId)
     assertEquals("theiaide/theia:v2", wb.image)
     assertEquals("1", wb.resources.cpuRequest)
@@ -498,7 +439,7 @@ class WorkbenchServiceTest {
       image = "theiaide/theia:next",
       resources = ResourceSpec(cpuRequest = "1", memoryRequest = "1Gi")
     )
-    val updated = service.updateWorkbench("user-1", "update-wb", null, updateRequest)
+    val updated = service.updateWorkbench("user-1", "update-wb", updateRequest)
 
     assertEquals("theiaide/theia:next", updated.image)
     assertEquals("1", updated.resources.cpuRequest)
@@ -508,7 +449,7 @@ class WorkbenchServiceTest {
   @Test
   fun `updateWorkbench throws WorkbenchNotFoundException for missing workbench`() {
     assertThrows<WorkbenchNotFoundException> {
-      service.updateWorkbench("user-1", "nonexistent", null, WorkbenchUpdateRequest())
+      service.updateWorkbench("user-1", "nonexistent", WorkbenchUpdateRequest())
     }
   }
 
@@ -528,7 +469,7 @@ class WorkbenchServiceTest {
     ))
 
     val updated = service.updateWorkbench(
-      "user-1", "partial-wb", null,
+      "user-1", "partial-wb",
       WorkbenchUpdateRequest(image = "theiaide/theia:v3")
     )
 
@@ -549,7 +490,7 @@ class WorkbenchServiceTest {
     ))
 
     val updated = service.updateWorkbench(
-      "user-1", "res-only-wb", null,
+      "user-1", "res-only-wb",
       WorkbenchUpdateRequest(resources = ResourceSpec(cpuRequest = "4"))
     )
 
@@ -565,7 +506,7 @@ class WorkbenchServiceTest {
     ))
 
     val updated = service.updateWorkbench(
-      "user-1", "noop-wb", null,
+      "user-1", "noop-wb",
       WorkbenchUpdateRequest()
     )
 
@@ -578,37 +519,11 @@ class WorkbenchServiceTest {
   }
 
   @Test
-  fun `updateWorkbench with namespace finds correct workbench`() {
-    // Insert entities directly to bypass the duplicate name check
-    val devEntity = createSampleEntity(instanceName = "upd-ns-wb", namespace = "dev")
-    val prodEntity = createSampleEntity(instanceName = "upd-ns-wb", namespace = "prod", instanceId = UUID.randomUUID())
-    repository.save(devEntity)
-    repository.save(prodEntity)
-
-    val updated = service.updateWorkbench(
-      "user-1", "upd-ns-wb", "dev",
-      WorkbenchUpdateRequest(image = "theiaide/theia:dev-v2")
-    )
-
-    assertEquals("theiaide/theia:dev-v2", updated.image)
-    assertEquals("dev", updated.namespace)
-  }
-
-  @Test
-  fun `updateWorkbench with namespace throws when not found in that namespace`() {
-    service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "upd-wb", namespace = "dev"))
-
-    assertThrows<WorkbenchNotFoundException> {
-      service.updateWorkbench("user-1", "upd-wb", "staging", WorkbenchUpdateRequest(image = "new"))
-    }
-  }
-
-  @Test
   fun `updateWorkbench persists changes to database`() {
     val created = service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "persist-wb"))
 
     service.updateWorkbench(
-      "user-1", "persist-wb", null,
+      "user-1", "persist-wb",
       WorkbenchUpdateRequest(image = "theiaide/theia:updated", resources = ResourceSpec(cpuRequest = "8"))
     )
 
@@ -622,7 +537,7 @@ class WorkbenchServiceTest {
     val created = service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "k8s-upd-wb"))
 
     service.updateWorkbench(
-      "user-1", "k8s-upd-wb", null,
+      "user-1", "k8s-upd-wb",
       WorkbenchUpdateRequest(image = "theiaide/theia:v2")
     )
 
@@ -652,7 +567,7 @@ class WorkbenchServiceTest {
     assertEquals(1, client.persistentVolumeClaims().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
 
-    val response = service.suspendWorkbench("user-1", "suspend-wb", null)
+    val response = service.suspendWorkbench("user-1", "suspend-wb")
 
     assertEquals(WorkbenchStatus.SUSPENDED.name, response.status)
     assertEquals("suspend-wb", response.instanceName)
@@ -672,7 +587,7 @@ class WorkbenchServiceTest {
   fun `suspendWorkbench persists SUSPENDED status in database`() {
     val created = service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "suspend-persist-wb"))
 
-    service.suspendWorkbench("user-1", "suspend-persist-wb", null)
+    service.suspendWorkbench("user-1", "suspend-persist-wb")
 
     val entity = repository.findById(created.instanceId).get()
     assertEquals(WorkbenchStatus.SUSPENDED.name, entity.status)
@@ -681,37 +596,19 @@ class WorkbenchServiceTest {
   @Test
   fun `suspendWorkbench throws WorkbenchNotFoundException for missing workbench`() {
     assertThrows<WorkbenchNotFoundException> {
-      service.suspendWorkbench("user-1", "nonexistent", null)
+      service.suspendWorkbench("user-1", "nonexistent")
     }
   }
 
   @Test
   fun `suspendWorkbench throws IllegalArgumentException when already suspended`() {
     service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "already-suspended-wb"))
-    service.suspendWorkbench("user-1", "already-suspended-wb", null)
+    service.suspendWorkbench("user-1", "already-suspended-wb")
 
     val exception = assertThrows<IllegalArgumentException> {
-      service.suspendWorkbench("user-1", "already-suspended-wb", null)
+      service.suspendWorkbench("user-1", "already-suspended-wb")
     }
     assertTrue(exception.message!!.contains("already suspended"))
-  }
-
-  @Test
-  fun `suspendWorkbench with namespace suspends correct workbench`() {
-    // Insert entities directly to bypass the duplicate name check
-    val devEntity = createSampleEntity(instanceName = "susp-ns-wb", namespace = "dev")
-    val prodEntity = createSampleEntity(instanceName = "susp-ns-wb", namespace = "prod", instanceId = UUID.randomUUID())
-    repository.save(devEntity)
-    repository.save(prodEntity)
-
-    val response = service.suspendWorkbench("user-1", "susp-ns-wb", "dev")
-
-    assertEquals(WorkbenchStatus.SUSPENDED.name, response.status)
-    assertEquals("dev", response.namespace)
-
-    // Prod workbench should not be suspended
-    val prodFromDb = repository.findById(prodEntity.instanceId).get()
-    assertNotEquals(WorkbenchStatus.SUSPENDED.name, prodFromDb.status)
   }
 
   @Test
@@ -719,9 +616,9 @@ class WorkbenchServiceTest {
     service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "active-wb"))
     service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "to-suspend-wb"))
 
-    service.suspendWorkbench("user-1", "to-suspend-wb", null)
+    service.suspendWorkbench("user-1", "to-suspend-wb")
 
-    val workbenches = service.listWorkbenches("user-1", null)
+    val workbenches = service.listWorkbenches("user-1")
     assertEquals(2, workbenches.size)
 
     val suspendedWb = workbenches.first { it.instanceName == "to-suspend-wb" }
@@ -735,7 +632,7 @@ class WorkbenchServiceTest {
     val created = service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "resume-wb"))
     val instanceId = created.instanceId.toString()
 
-    service.suspendWorkbench("user-1", "resume-wb", null)
+    service.suspendWorkbench("user-1", "resume-wb")
 
     // Verify deployment and service are gone after suspend
     assertEquals(0, client.apps().deployments().inNamespace("default")
@@ -743,7 +640,7 @@ class WorkbenchServiceTest {
     assertEquals(0, client.services().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
 
-    val response = service.resumeWorkbench("user-1", "resume-wb", null)
+    val response = service.resumeWorkbench("user-1", "resume-wb")
 
     assertEquals(WorkbenchStatus.RUNNING.name, response.status)
     assertEquals("resume-wb", response.instanceName)
@@ -762,9 +659,9 @@ class WorkbenchServiceTest {
   @Test
   fun `resumeWorkbench persists RUNNING status in database`() {
     val created = service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "resume-persist-wb"))
-    service.suspendWorkbench("user-1", "resume-persist-wb", null)
+    service.suspendWorkbench("user-1", "resume-persist-wb")
 
-    service.resumeWorkbench("user-1", "resume-persist-wb", null)
+    service.resumeWorkbench("user-1", "resume-persist-wb")
 
     val entity = repository.findById(created.instanceId).get()
     assertEquals(WorkbenchStatus.RUNNING.name, entity.status)
@@ -773,7 +670,7 @@ class WorkbenchServiceTest {
   @Test
   fun `resumeWorkbench throws WorkbenchNotFoundException for missing workbench`() {
     assertThrows<WorkbenchNotFoundException> {
-      service.resumeWorkbench("user-1", "nonexistent", null)
+      service.resumeWorkbench("user-1", "nonexistent")
     }
   }
 
@@ -782,27 +679,9 @@ class WorkbenchServiceTest {
     service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "running-wb"))
 
     val exception = assertThrows<IllegalArgumentException> {
-      service.resumeWorkbench("user-1", "running-wb", null)
+      service.resumeWorkbench("user-1", "running-wb")
     }
     assertTrue(exception.message!!.contains("is not suspended"))
-  }
-
-  @Test
-  fun `resumeWorkbench with namespace resumes correct workbench`() {
-    // Insert entities directly to bypass duplicate name check
-    val devEntity = createSampleEntity(instanceName = "res-ns-wb", namespace = "dev", status = WorkbenchStatus.SUSPENDED.name)
-    val prodEntity = createSampleEntity(instanceName = "res-ns-wb", namespace = "prod", status = WorkbenchStatus.SUSPENDED.name, instanceId = UUID.randomUUID())
-    repository.save(devEntity)
-    repository.save(prodEntity)
-
-    val response = service.resumeWorkbench("user-1", "res-ns-wb", "dev")
-
-    assertEquals(WorkbenchStatus.RUNNING.name, response.status)
-    assertEquals("dev", response.namespace)
-
-    // Prod workbench should still be SUSPENDED
-    val prodFromDb = repository.findById(prodEntity.instanceId).get()
-    assertEquals(WorkbenchStatus.SUSPENDED.name, prodFromDb.status)
   }
 
   @Test
@@ -820,8 +699,8 @@ class WorkbenchServiceTest {
       resources = customResources
     ))
 
-    service.suspendWorkbench("user-1", "cycle-wb", null)
-    val resumed = service.resumeWorkbench("user-1", "cycle-wb", null)
+    service.suspendWorkbench("user-1", "cycle-wb")
+    val resumed = service.resumeWorkbench("user-1", "cycle-wb")
 
     assertEquals(created.instanceId, resumed.instanceId)
     assertEquals("theiaide/theia:custom", resumed.image)
