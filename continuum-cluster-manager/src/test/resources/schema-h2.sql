@@ -1,3 +1,4 @@
+-- H2-compatible schema for tests (mirrors main schema.sql without PostgreSQL-specific features)
 CREATE TABLE IF NOT EXISTS workbench_instances (
     instance_id         UUID PRIMARY KEY,
     instance_name       VARCHAR(255) NOT NULL,
@@ -16,3 +17,15 @@ CREATE TABLE IF NOT EXISTS workbench_instances (
     updated_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     entity_version      BIGINT       NOT NULL DEFAULT 0
 );
+
+-- Note: Partial unique index (WHERE clause) not supported in H2
+-- The duplicate prevention is handled in application code (WorkbenchService)
+
+-- Index for fast lookups by user_id and instance_name
+CREATE INDEX IF NOT EXISTS idx_workbench_user_instance
+    ON workbench_instances (user_id, instance_name);
+
+-- Index for listing workbenches by user (excludes deleted)
+CREATE INDEX IF NOT EXISTS idx_workbench_user_status
+    ON workbench_instances (user_id, status);
+

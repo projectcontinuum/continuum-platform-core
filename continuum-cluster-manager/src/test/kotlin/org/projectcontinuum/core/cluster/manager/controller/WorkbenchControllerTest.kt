@@ -62,7 +62,7 @@ class WorkbenchControllerTest {
       post("/api/v1/workbench")
         .header("x-continuum-user-id", "user-1")
         .contentType(MediaType.APPLICATION_JSON)
-        .content("""{"instanceName": "my-workbench", "namespace": "default"}""")
+        .content("""{"instanceName": "my-workbench"}""")
     )
       .andExpect(status().isCreated)
       .andExpect(jsonPath("$.instanceName").value("my-workbench"))
@@ -108,7 +108,6 @@ class WorkbenchControllerTest {
         .contentType(MediaType.APPLICATION_JSON)
         .content("""{
           "instanceName": "my-workbench",
-          "namespace": "dev",
           "image": "theiaide/theia:next",
           "resources": {
             "cpuRequest": "1",
@@ -159,7 +158,7 @@ class WorkbenchControllerTest {
   @Test
   fun `GET instance returns workbench status`() {
     val response = sampleResponse()
-    whenever(workbenchService.getWorkbenchStatus("user-1", "my-workbench", null)).thenReturn(response)
+    whenever(workbenchService.getWorkbenchStatus("user-1", "my-workbench")).thenReturn(response)
 
     mockMvc.perform(
       get("/api/v1/workbench/my-workbench")
@@ -171,22 +170,8 @@ class WorkbenchControllerTest {
   }
 
   @Test
-  fun `GET instance with namespace param`() {
-    val response = sampleResponse()
-    whenever(workbenchService.getWorkbenchStatus("user-1", "my-workbench", "dev")).thenReturn(response)
-
-    mockMvc.perform(
-      get("/api/v1/workbench/my-workbench")
-        .header("x-continuum-user-id", "user-1")
-        .param("namespace", "dev")
-    )
-      .andExpect(status().isOk)
-      .andExpect(jsonPath("$.instanceName").value("my-workbench"))
-  }
-
-  @Test
   fun `GET instance returns 404 when not found`() {
-    whenever(workbenchService.getWorkbenchStatus("user-1", "missing", null))
+    whenever(workbenchService.getWorkbenchStatus("user-1", "missing"))
       .thenThrow(WorkbenchNotFoundException("Workbench 'missing' not found for user 'user-1'"))
 
     mockMvc.perform(
@@ -200,7 +185,7 @@ class WorkbenchControllerTest {
   @Test
   fun `GET instance without user-id header defaults to anonymous`() {
     val response = sampleResponse(userId = "anonymous")
-    whenever(workbenchService.getWorkbenchStatus("anonymous", "my-workbench", null)).thenReturn(response)
+    whenever(workbenchService.getWorkbenchStatus("anonymous", "my-workbench")).thenReturn(response)
 
     mockMvc.perform(
       get("/api/v1/workbench/my-workbench")
@@ -232,7 +217,7 @@ class WorkbenchControllerTest {
       createdAt = now,
       updatedAt = now
     )
-    whenever(workbenchService.getWorkbenchStatus("user-1", "full-wb", null)).thenReturn(response)
+    whenever(workbenchService.getWorkbenchStatus("user-1", "full-wb")).thenReturn(response)
 
     mockMvc.perform(
       get("/api/v1/workbench/full-wb")
@@ -263,23 +248,13 @@ class WorkbenchControllerTest {
         .header("x-continuum-user-id", "user-1")
     )
       .andExpect(status().isNoContent)
-  }
 
-  @Test
-  fun `DELETE with namespace param calls service with namespace`() {
-    mockMvc.perform(
-      delete("/api/v1/workbench/my-workbench")
-        .header("x-continuum-user-id", "user-1")
-        .param("namespace", "dev")
-    )
-      .andExpect(status().isNoContent)
-
-    verify(workbenchService).deleteWorkbench("user-1", "my-workbench", "dev")
+    verify(workbenchService).deleteWorkbench("user-1", "my-workbench")
   }
 
   @Test
   fun `DELETE returns 404 when workbench not found`() {
-    whenever(workbenchService.deleteWorkbench("user-1", "missing", null))
+    whenever(workbenchService.deleteWorkbench("user-1", "missing"))
       .thenThrow(WorkbenchNotFoundException("Workbench 'missing' not found for user 'user-1'"))
 
     mockMvc.perform(
@@ -297,7 +272,7 @@ class WorkbenchControllerTest {
     )
       .andExpect(status().isNoContent)
 
-    verify(workbenchService).deleteWorkbench("anonymous", "my-workbench", null)
+    verify(workbenchService).deleteWorkbench("anonymous", "my-workbench")
   }
 
   // ── GET /api/v1/workbench ───────────────────────────────────────────
@@ -305,7 +280,7 @@ class WorkbenchControllerTest {
   @Test
   fun `GET list returns workbenches for user`() {
     val responses = listOf(sampleResponse("wb-1"), sampleResponse("wb-2"))
-    whenever(workbenchService.listWorkbenches("user-1", null)).thenReturn(responses)
+    whenever(workbenchService.listWorkbenches("user-1")).thenReturn(responses)
 
     mockMvc.perform(
       get("/api/v1/workbench")
@@ -318,22 +293,8 @@ class WorkbenchControllerTest {
   }
 
   @Test
-  fun `GET list with namespace filter`() {
-    val responses = listOf(sampleResponse("wb-1"))
-    whenever(workbenchService.listWorkbenches("user-1", "production")).thenReturn(responses)
-
-    mockMvc.perform(
-      get("/api/v1/workbench")
-        .header("x-continuum-user-id", "user-1")
-        .param("namespace", "production")
-    )
-      .andExpect(status().isOk)
-      .andExpect(jsonPath("$.length()").value(1))
-  }
-
-  @Test
   fun `GET list returns empty array when no workbenches exist`() {
-    whenever(workbenchService.listWorkbenches("user-1", null)).thenReturn(emptyList())
+    whenever(workbenchService.listWorkbenches("user-1")).thenReturn(emptyList())
 
     mockMvc.perform(
       get("/api/v1/workbench")
@@ -345,14 +306,14 @@ class WorkbenchControllerTest {
 
   @Test
   fun `GET list without user-id header defaults to anonymous`() {
-    whenever(workbenchService.listWorkbenches("anonymous", null)).thenReturn(emptyList())
+    whenever(workbenchService.listWorkbenches("anonymous")).thenReturn(emptyList())
 
     mockMvc.perform(
       get("/api/v1/workbench")
     )
       .andExpect(status().isOk)
 
-    verify(workbenchService).listWorkbenches("anonymous", null)
+    verify(workbenchService).listWorkbenches("anonymous")
   }
 
   // ── PUT /api/v1/workbench/{instanceName} ────────────────────────────
@@ -360,7 +321,7 @@ class WorkbenchControllerTest {
   @Test
   fun `PUT updates workbench config`() {
     val response = sampleResponse()
-    whenever(workbenchService.updateWorkbench(eq("user-1"), eq("my-workbench"), eq(null), any()))
+    whenever(workbenchService.updateWorkbench(eq("user-1"), eq("my-workbench"), any()))
       .thenReturn(response)
 
     mockMvc.perform(
@@ -374,26 +335,8 @@ class WorkbenchControllerTest {
   }
 
   @Test
-  fun `PUT with namespace param calls service with namespace`() {
-    val response = sampleResponse()
-    whenever(workbenchService.updateWorkbench(eq("user-1"), eq("my-workbench"), eq("staging"), any()))
-      .thenReturn(response)
-
-    mockMvc.perform(
-      put("/api/v1/workbench/my-workbench")
-        .header("x-continuum-user-id", "user-1")
-        .param("namespace", "staging")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content("""{"image": "theiaide/theia:next"}""")
-    )
-      .andExpect(status().isOk)
-
-    verify(workbenchService).updateWorkbench(eq("user-1"), eq("my-workbench"), eq("staging"), any())
-  }
-
-  @Test
   fun `PUT returns 404 when workbench not found`() {
-    whenever(workbenchService.updateWorkbench(eq("user-1"), eq("missing"), eq(null), any()))
+    whenever(workbenchService.updateWorkbench(eq("user-1"), eq("missing"), any()))
       .thenThrow(WorkbenchNotFoundException("Workbench 'missing' not found for user 'user-1'"))
 
     mockMvc.perform(
@@ -409,7 +352,7 @@ class WorkbenchControllerTest {
   @Test
   fun `PUT with resource spec updates`() {
     val response = sampleResponse()
-    whenever(workbenchService.updateWorkbench(eq("user-1"), eq("my-workbench"), eq(null), any()))
+    whenever(workbenchService.updateWorkbench(eq("user-1"), eq("my-workbench"), any()))
       .thenReturn(response)
 
     mockMvc.perform(
@@ -432,7 +375,7 @@ class WorkbenchControllerTest {
   @Test
   fun `PUT without user-id header defaults to anonymous`() {
     val response = sampleResponse(userId = "anonymous")
-    whenever(workbenchService.updateWorkbench(eq("anonymous"), eq("my-workbench"), eq(null), any()))
+    whenever(workbenchService.updateWorkbench(eq("anonymous"), eq("my-workbench"), any()))
       .thenReturn(response)
 
     mockMvc.perform(
@@ -442,7 +385,7 @@ class WorkbenchControllerTest {
     )
       .andExpect(status().isOk)
 
-    verify(workbenchService).updateWorkbench(eq("anonymous"), eq("my-workbench"), eq(null), any())
+    verify(workbenchService).updateWorkbench(eq("anonymous"), eq("my-workbench"), any())
   }
 
   // ── PUT /api/v1/workbench/{instanceName}/suspend ────────────────────
@@ -450,7 +393,7 @@ class WorkbenchControllerTest {
   @Test
   fun `PUT suspend returns 200 with suspended response`() {
     val response = sampleResponse(status = WorkbenchStatus.SUSPENDED.name)
-    whenever(workbenchService.suspendWorkbench("user-1", "my-workbench", null)).thenReturn(response)
+    whenever(workbenchService.suspendWorkbench("user-1", "my-workbench")).thenReturn(response)
 
     mockMvc.perform(
       put("/api/v1/workbench/my-workbench/suspend")
@@ -462,23 +405,8 @@ class WorkbenchControllerTest {
   }
 
   @Test
-  fun `PUT suspend with namespace param calls service with namespace`() {
-    val response = sampleResponse(status = WorkbenchStatus.SUSPENDED.name)
-    whenever(workbenchService.suspendWorkbench("user-1", "my-workbench", "staging")).thenReturn(response)
-
-    mockMvc.perform(
-      put("/api/v1/workbench/my-workbench/suspend")
-        .header("x-continuum-user-id", "user-1")
-        .param("namespace", "staging")
-    )
-      .andExpect(status().isOk)
-
-    verify(workbenchService).suspendWorkbench("user-1", "my-workbench", "staging")
-  }
-
-  @Test
   fun `PUT suspend returns 404 when workbench not found`() {
-    whenever(workbenchService.suspendWorkbench("user-1", "missing", null))
+    whenever(workbenchService.suspendWorkbench("user-1", "missing"))
       .thenThrow(WorkbenchNotFoundException("Workbench 'missing' not found for user 'user-1'"))
 
     mockMvc.perform(
@@ -491,7 +419,7 @@ class WorkbenchControllerTest {
 
   @Test
   fun `PUT suspend returns 400 when already suspended`() {
-    whenever(workbenchService.suspendWorkbench("user-1", "my-workbench", null))
+    whenever(workbenchService.suspendWorkbench("user-1", "my-workbench"))
       .thenThrow(IllegalArgumentException("Workbench 'my-workbench' is already suspended"))
 
     mockMvc.perform(
@@ -505,14 +433,14 @@ class WorkbenchControllerTest {
   @Test
   fun `PUT suspend without user-id header defaults to anonymous`() {
     val response = sampleResponse(userId = "anonymous", status = WorkbenchStatus.SUSPENDED.name)
-    whenever(workbenchService.suspendWorkbench("anonymous", "my-workbench", null)).thenReturn(response)
+    whenever(workbenchService.suspendWorkbench("anonymous", "my-workbench")).thenReturn(response)
 
     mockMvc.perform(
       put("/api/v1/workbench/my-workbench/suspend")
     )
       .andExpect(status().isOk)
 
-    verify(workbenchService).suspendWorkbench("anonymous", "my-workbench", null)
+    verify(workbenchService).suspendWorkbench("anonymous", "my-workbench")
   }
 
   // ── PUT /api/v1/workbench/{instanceName}/resume ─────────────────────
@@ -520,7 +448,7 @@ class WorkbenchControllerTest {
   @Test
   fun `PUT resume returns 200 with running response`() {
     val response = sampleResponse(status = WorkbenchStatus.RUNNING.name)
-    whenever(workbenchService.resumeWorkbench("user-1", "my-workbench", null)).thenReturn(response)
+    whenever(workbenchService.resumeWorkbench("user-1", "my-workbench")).thenReturn(response)
 
     mockMvc.perform(
       put("/api/v1/workbench/my-workbench/resume")
@@ -532,23 +460,8 @@ class WorkbenchControllerTest {
   }
 
   @Test
-  fun `PUT resume with namespace param calls service with namespace`() {
-    val response = sampleResponse(status = WorkbenchStatus.RUNNING.name)
-    whenever(workbenchService.resumeWorkbench("user-1", "my-workbench", "staging")).thenReturn(response)
-
-    mockMvc.perform(
-      put("/api/v1/workbench/my-workbench/resume")
-        .header("x-continuum-user-id", "user-1")
-        .param("namespace", "staging")
-    )
-      .andExpect(status().isOk)
-
-    verify(workbenchService).resumeWorkbench("user-1", "my-workbench", "staging")
-  }
-
-  @Test
   fun `PUT resume returns 404 when workbench not found`() {
-    whenever(workbenchService.resumeWorkbench("user-1", "missing", null))
+    whenever(workbenchService.resumeWorkbench("user-1", "missing"))
       .thenThrow(WorkbenchNotFoundException("Workbench 'missing' not found for user 'user-1'"))
 
     mockMvc.perform(
@@ -561,7 +474,7 @@ class WorkbenchControllerTest {
 
   @Test
   fun `PUT resume returns 400 when workbench is not suspended`() {
-    whenever(workbenchService.resumeWorkbench("user-1", "my-workbench", null))
+    whenever(workbenchService.resumeWorkbench("user-1", "my-workbench"))
       .thenThrow(IllegalArgumentException("Workbench 'my-workbench' is not suspended"))
 
     mockMvc.perform(
@@ -575,13 +488,13 @@ class WorkbenchControllerTest {
   @Test
   fun `PUT resume without user-id header defaults to anonymous`() {
     val response = sampleResponse(userId = "anonymous", status = WorkbenchStatus.RUNNING.name)
-    whenever(workbenchService.resumeWorkbench("anonymous", "my-workbench", null)).thenReturn(response)
+    whenever(workbenchService.resumeWorkbench("anonymous", "my-workbench")).thenReturn(response)
 
     mockMvc.perform(
       put("/api/v1/workbench/my-workbench/resume")
     )
       .andExpect(status().isOk)
 
-    verify(workbenchService).resumeWorkbench("anonymous", "my-workbench", null)
+    verify(workbenchService).resumeWorkbench("anonymous", "my-workbench")
   }
 }

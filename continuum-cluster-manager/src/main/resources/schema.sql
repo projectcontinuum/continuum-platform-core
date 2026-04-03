@@ -17,6 +17,16 @@ CREATE TABLE IF NOT EXISTS workbench_instances (
     entity_version      BIGINT       NOT NULL DEFAULT 0
 );
 
+-- Partial unique index to prevent duplicate active workbenches per user (PostgreSQL-specific)
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_workbench
     ON workbench_instances (user_id, instance_name)
     WHERE status NOT IN ('DELETED', 'TERMINATING');
+
+-- Index for fast lookups by user_id and instance_name
+CREATE INDEX IF NOT EXISTS idx_workbench_user_instance
+    ON workbench_instances (user_id, instance_name);
+
+-- Index for listing workbenches by user (excludes deleted)
+CREATE INDEX IF NOT EXISTS idx_workbench_user_status
+    ON workbench_instances (user_id, status);
+

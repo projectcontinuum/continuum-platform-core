@@ -8,6 +8,7 @@ spring:
   sql:
     init:
       mode: always
+      schema-locations: classpath:schema-h2.sql
 
 continuum.core:
   cluster-manager:
@@ -15,4 +16,4 @@ continuum.core:
       master-url: ""
     workbench:
       default-image: theiaide/theia:latest
-      default-namespace: default
+      namespace: default

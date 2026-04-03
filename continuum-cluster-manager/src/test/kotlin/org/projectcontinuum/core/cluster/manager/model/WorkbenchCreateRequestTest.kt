@@ -10,7 +10,6 @@ class WorkbenchCreateRequestTest {
     val request = WorkbenchCreateRequest(instanceName = "test-wb")
 
     assertEquals("test-wb", request.instanceName)
-    assertEquals("default", request.namespace)
     assertEquals("projectcontinuum/continuum-workbench:0.0.5", request.image)
     assertEquals(ResourceSpec(), request.resources)
   }
@@ -20,21 +19,19 @@ class WorkbenchCreateRequestTest {
     val resources = ResourceSpec(cpuRequest = "4")
     val request = WorkbenchCreateRequest(
       instanceName = "custom-wb",
-      namespace = "staging",
       resources = resources,
       image = "theiaide/theia:v2"
     )
 
     assertEquals("custom-wb", request.instanceName)
-    assertEquals("staging", request.namespace)
     assertEquals("theiaide/theia:v2", request.image)
     assertEquals("4", request.resources.cpuRequest)
   }
 
   @Test
   fun `equality based on all fields`() {
-    val req1 = WorkbenchCreateRequest(instanceName = "wb", namespace = "dev")
-    val req2 = WorkbenchCreateRequest(instanceName = "wb", namespace = "dev")
+    val req1 = WorkbenchCreateRequest(instanceName = "wb")
+    val req2 = WorkbenchCreateRequest(instanceName = "wb")
 
     assertEquals(req1, req2)
   }
