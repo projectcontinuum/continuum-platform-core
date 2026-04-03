@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import AuthModal from './components/AuthModal';
 
@@ -19,9 +19,41 @@ function useTheme() {
   return { isDark, toggle };
 }
 
+function useMousePosition() {
+  const [mousePosition, setMousePosition] = useState({ x: 0.5, y: 0.5 });
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      // Normalize mouse position to 0-1 range
+      setMousePosition({
+        x: e.clientX / window.innerWidth,
+        y: e.clientY / window.innerHeight,
+      });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
+  }, []);
+
+  return mousePosition;
+}
+
 export default function App() {
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const { isDark, toggle } = useTheme();
+  const mousePosition = useMousePosition();
+
+  // Calculate light position relative to center (for shadow effect)
+  const lightOffsetX = (mousePosition.x - 0.5) * 100; // -50 to 50
+  const lightOffsetY = (mousePosition.y - 0.5) * 100; // -50 to 50
+
+  // Shadow offset (opposite direction of light) - increased multiplier for more visible effect
+  const shadowX = -lightOffsetX * 0.5;
+  const shadowY = -lightOffsetY * 0.5;
+
+  // Glow position (same direction as light)
+  const glowX = lightOffsetX * 0.6;
+  const glowY = lightOffsetY * 0.6;
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -57,10 +89,10 @@ export default function App() {
       {/* Main content - centered sign in */}
       <main className="flex-1 flex items-center justify-center px-4">
         <div className="w-full max-w-md">
-          {/* Background decoration */}
-          <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-accent/10 rounded-full blur-3xl" />
-            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple/10 rounded-full blur-3xl" />
+          {/* Static background ambient */}
+          <div className="fixed inset-0 overflow-hidden pointer-events-none">
+            <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-accent/5 rounded-full blur-3xl" />
+            <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple/5 rounded-full blur-3xl" />
           </div>
 
           <motion.div
@@ -80,19 +112,56 @@ export default function App() {
             </p>
           </motion.div>
 
+          {/* Sign-in card with dynamic lighting */}
           <motion.div
-            className="relative z-10 bg-card rounded-2xl border border-divider p-8 shadow-xl"
+            className="relative z-10"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
           >
-            <AuthModal
-              isOpen={true}
-              onClose={() => {}}
-              mode={authMode}
-              onSwitchMode={setAuthMode}
-              embedded={true}
+            {/* Dynamic glow behind card based on light position */}
+            <motion.div
+              className="absolute -inset-4 rounded-3xl opacity-60"
+              style={{
+                background: `radial-gradient(circle at ${50 + glowX}% ${50 + glowY}%, rgb(var(--c-accent) / 0.3) 0%, rgb(var(--c-purple) / 0.15) 40%, transparent 70%)`,
+                filter: 'blur(30px)',
+              }}
+              animate={{
+                background: `radial-gradient(circle at ${50 + glowX}% ${50 + glowY}%, rgb(var(--c-accent) / 0.3) 0%, rgb(var(--c-purple) / 0.15) 40%, transparent 70%)`,
+              }}
+              transition={{
+                type: 'tween',
+                duration: 0.1,
+                ease: 'linear',
+              }}
             />
+
+            {/* Card with dynamic shadow - multiple layers for depth, enhanced for light mode visibility */}
+            <motion.div
+              className="relative bg-card rounded-2xl border border-divider p-8"
+              animate={{
+                boxShadow: `
+                  ${shadowX * 0.4}px ${shadowY * 0.4}px 10px -2px rgba(51, 56, 77, 0.12),
+                  ${shadowX * 0.7}px ${shadowY * 0.7}px 25px -5px rgba(51, 56, 77, 0.18),
+                  ${shadowX * 1.1}px ${shadowY * 1.1}px 50px -8px rgba(112, 86, 151, 0.4),
+                  ${shadowX * 1.5}px ${shadowY * 1.5}px 80px -12px rgba(112, 86, 151, 0.25),
+                  0px 30px 60px -15px rgba(51, 56, 77, 0.3)
+                `,
+              }}
+              transition={{
+                type: 'tween',
+                duration: 0.15,
+                ease: 'easeOut',
+              }}
+            >
+              <AuthModal
+                isOpen={true}
+                onClose={() => {}}
+                mode={authMode}
+                onSwitchMode={setAuthMode}
+                embedded={true}
+              />
+            </motion.div>
           </motion.div>
 
           <motion.p
