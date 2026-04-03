@@ -7,8 +7,7 @@ plugins {
 // Read version and name from package.json
 val packageJsonFile = file("package.json")
 val packageJson = groovy.json.JsonSlurper().parseText(packageJsonFile.readText()) as Map<*, *>
-version = packageJson["version"] ?: throw GradleException("Unable to read version from package.json")
-val projectName = packageJson["name"] ?: throw GradleException("Unable to read name from package.json")
+version = property("platformVersion").toString()
 
 node {
     version.set("22.12.0") // Specify the Node.js version
@@ -43,7 +42,7 @@ tasks.register<Exec>("jib") {
     description = "Docker build and push to Docker Hub"
     group = "Jib tasks"
     val dockerRepoOwner = (System.getenv("GITHUB_REPOSITORY_OWNER") ?: property("repoOwner").toString()).lowercase()
-    val dockerRepoName = "docker.io/$dockerRepoOwner/$projectName"
+    val dockerRepoName = "docker.io/$dockerRepoOwner/${project.name.lowercase()}"
     val imageName = "$dockerRepoName:${project.version}"
     val latestImageName = "$dockerRepoName:latest"
     commandLine("bash", "-c",
