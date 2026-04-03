@@ -29,10 +29,50 @@ class WorkbenchService(
   private val logger = LoggerFactory.getLogger(WorkbenchService::class.java)
   private val objectMapper = jacksonObjectMapper()
 
+  /**
+   * Audit operation types for workbench lifecycle events
+   */
+  private enum class AuditOperation {
+    CREATE, DELETE, SUSPEND, RESUME, UPDATE, GET_STATUS, LIST
+  }
+
+  /**
+   * Logs an audit event for workbench operations.
+   * Format: AUDIT | operation=X | userId=Y | instanceId=Z | instanceName=W | status=S | details={...}
+   */
+  private fun logAudit(
+    operation: AuditOperation,
+    userId: String,
+    instanceId: UUID? = null,
+    instanceName: String? = null,
+    status: String = "SUCCESS",
+    details: Map<String, Any?> = emptyMap()
+  ) {
+    val detailsJson = if (details.isNotEmpty()) objectMapper.writeValueAsString(details) else "{}"
+    logger.info(
+      "AUDIT | operation={} | userId={} | instanceId={} | instanceName={} | status={} | details={}",
+      operation.name,
+      userId,
+      instanceId?.toString() ?: "N/A",
+      instanceName ?: "N/A",
+      status,
+      detailsJson
+    )
+  }
+
   fun createWorkbench(userId: String, request: WorkbenchCreateRequest): WorkbenchResponse {
+    logger.info("AUDIT | operation=CREATE | userId={} | instanceName={} | status=INITIATED", userId, request.instanceName)
+
     val existing = repository.findByUserIdAndInstanceName(userId, request.instanceName)
     val activeStatuses = setOf(WorkbenchStatus.RUNNING.name, WorkbenchStatus.SUSPENDED.name)
     if (existing != null && existing.status in activeStatuses) {
+      logAudit(
+        operation = AuditOperation.CREATE,
+        userId = userId,
+        instanceName = request.instanceName,
+        status = "FAILED",
+        details = mapOf("reason" to "Workbench already exists")
+      )
       throw IllegalArgumentException("Workbench '${request.instanceName}' already exists for user '$userId'")
     }
 
@@ -84,9 +124,32 @@ class WorkbenchService(
         repository.save(entityToSave)
       }!!
 
+      logAudit(
+        operation = AuditOperation.CREATE,
+        userId = userId,
+        instanceId = instanceId,
+        instanceName = request.instanceName,
+        status = "SUCCESS",
+        details = mapOf(
+          "namespace" to namespace,
+          "image" to request.image,
+          "cpuRequest" to request.resources.cpuRequest,
+          "memoryRequest" to request.resources.memoryRequest,
+          "storageSize" to request.resources.storageSize
+        )
+      )
+
       return toResponse(savedEntity)
     } catch (ex: Exception) {
       logger.error("Failed to create K8s resources for workbench $instanceId, rolling back", ex)
+      logAudit(
+        operation = AuditOperation.CREATE,
+        userId = userId,
+        instanceId = instanceId,
+        instanceName = request.instanceName,
+        status = "FAILED",
+        details = mapOf("reason" to (ex.message ?: "Unknown error"))
+      )
       // Rollback K8s resources that were created
       rollbackK8sResources(k8sResourceIds, namespace)
       throw ex
@@ -95,21 +158,59 @@ class WorkbenchService(
 
   fun getWorkbenchStatus(userId: String, instanceName: String): WorkbenchResponse {
     val entity = repository.findByUserIdAndInstanceName(userId, instanceName)
-      ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+      ?: run {
+        logAudit(
+          operation = AuditOperation.GET_STATUS,
+          userId = userId,
+          instanceName = instanceName,
+          status = "FAILED",
+          details = mapOf("reason" to "Workbench not found")
+        )
+        throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+      }
 
     val refreshedEntity = refreshStatusFromK8s(entity)
+
+    logAudit(
+      operation = AuditOperation.GET_STATUS,
+      userId = userId,
+      instanceId = entity.instanceId,
+      instanceName = instanceName,
+      status = "SUCCESS",
+      details = mapOf("workbenchStatus" to refreshedEntity.status)
+    )
+
     return toResponse(refreshedEntity)
   }
 
   fun deleteWorkbench(userId: String, instanceName: String) {
+    logger.info("AUDIT | operation=DELETE | userId={} | instanceName={} | status=INITIATED", userId, instanceName)
+
     val entity = repository.findByUserIdAndInstanceName(userId, instanceName)
-      ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+      ?: run {
+        logAudit(
+          operation = AuditOperation.DELETE,
+          userId = userId,
+          instanceName = instanceName,
+          status = "FAILED",
+          details = mapOf("reason" to "Workbench not found")
+        )
+        throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+      }
 
     // First, delete K8s resources
     try {
       deleteK8sResourcesByLabel(entity.instanceId.toString(), entity.namespace)
     } catch (ex: Exception) {
       logger.error("Failed to delete K8s resources for workbench ${entity.instanceId}", ex)
+      logAudit(
+        operation = AuditOperation.DELETE,
+        userId = userId,
+        instanceId = entity.instanceId,
+        instanceName = instanceName,
+        status = "FAILED",
+        details = mapOf("reason" to "Failed to delete K8s resources: ${ex.message}")
+      )
       throw ex
     }
 
@@ -121,19 +222,55 @@ class WorkbenchService(
       )
       repository.save(deletedEntity)
     }
+
+    logAudit(
+      operation = AuditOperation.DELETE,
+      userId = userId,
+      instanceId = entity.instanceId,
+      instanceName = instanceName,
+      status = "SUCCESS",
+      details = mapOf("previousStatus" to entity.status)
+    )
   }
 
   @Transactional(readOnly = true)
   fun listWorkbenches(userId: String): List<WorkbenchResponse> {
     val entities = repository.findByUserId(userId)
+
+    logAudit(
+      operation = AuditOperation.LIST,
+      userId = userId,
+      status = "SUCCESS",
+      details = mapOf("count" to entities.size)
+    )
+
     return entities.map { toResponse(it) }
   }
 
   fun suspendWorkbench(userId: String, instanceName: String): WorkbenchResponse {
+    logger.info("AUDIT | operation=SUSPEND | userId={} | instanceName={} | status=INITIATED", userId, instanceName)
+
     val entity = repository.findByUserIdAndInstanceName(userId, instanceName)
-      ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+      ?: run {
+        logAudit(
+          operation = AuditOperation.SUSPEND,
+          userId = userId,
+          instanceName = instanceName,
+          status = "FAILED",
+          details = mapOf("reason" to "Workbench not found")
+        )
+        throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+      }
 
     if (entity.status == WorkbenchStatus.SUSPENDED.name) {
+      logAudit(
+        operation = AuditOperation.SUSPEND,
+        userId = userId,
+        instanceId = entity.instanceId,
+        instanceName = instanceName,
+        status = "FAILED",
+        details = mapOf("reason" to "Workbench already suspended")
+      )
       throw IllegalArgumentException("Workbench '$instanceName' is already suspended")
     }
 
@@ -142,6 +279,14 @@ class WorkbenchService(
       suspendK8sResources(entity.instanceId.toString(), entity.namespace)
     } catch (ex: Exception) {
       logger.error("Failed to suspend K8s resources for workbench ${entity.instanceId}", ex)
+      logAudit(
+        operation = AuditOperation.SUSPEND,
+        userId = userId,
+        instanceId = entity.instanceId,
+        instanceName = instanceName,
+        status = "FAILED",
+        details = mapOf("reason" to "Failed to suspend K8s resources: ${ex.message}")
+      )
       throw ex
     }
 
@@ -154,14 +299,42 @@ class WorkbenchService(
       repository.save(entityToSave)
     }!!
 
+    logAudit(
+      operation = AuditOperation.SUSPEND,
+      userId = userId,
+      instanceId = entity.instanceId,
+      instanceName = instanceName,
+      status = "SUCCESS",
+      details = mapOf("previousStatus" to entity.status)
+    )
+
     return toResponse(suspendedEntity)
   }
 
   fun resumeWorkbench(userId: String, instanceName: String): WorkbenchResponse {
+    logger.info("AUDIT | operation=RESUME | userId={} | instanceName={} | status=INITIATED", userId, instanceName)
+
     val entity = repository.findByUserIdAndInstanceName(userId, instanceName)
-      ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+      ?: run {
+        logAudit(
+          operation = AuditOperation.RESUME,
+          userId = userId,
+          instanceName = instanceName,
+          status = "FAILED",
+          details = mapOf("reason" to "Workbench not found")
+        )
+        throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+      }
 
     if (entity.status != WorkbenchStatus.SUSPENDED.name) {
+      logAudit(
+        operation = AuditOperation.RESUME,
+        userId = userId,
+        instanceId = entity.instanceId,
+        instanceName = instanceName,
+        status = "FAILED",
+        details = mapOf("reason" to "Workbench is not suspended", "currentStatus" to entity.status)
+      )
       throw IllegalArgumentException("Workbench '$instanceName' is not suspended")
     }
 
@@ -176,6 +349,14 @@ class WorkbenchService(
       applyYaml(serviceYaml, entity.namespace)
     } catch (ex: Exception) {
       logger.error("Failed to resume K8s resources for workbench ${entity.instanceId}, rolling back", ex)
+      logAudit(
+        operation = AuditOperation.RESUME,
+        userId = userId,
+        instanceId = entity.instanceId,
+        instanceName = instanceName,
+        status = "FAILED",
+        details = mapOf("reason" to "Failed to resume K8s resources: ${ex.message}")
+      )
       // Rollback any partially created resources
       try {
         suspendK8sResources(entity.instanceId.toString(), entity.namespace)
@@ -194,12 +375,32 @@ class WorkbenchService(
       repository.save(entityToSave)
     }!!
 
+    logAudit(
+      operation = AuditOperation.RESUME,
+      userId = userId,
+      instanceId = entity.instanceId,
+      instanceName = instanceName,
+      status = "SUCCESS",
+      details = mapOf("previousStatus" to entity.status)
+    )
+
     return toResponse(resumedEntity)
   }
 
   fun updateWorkbench(userId: String, instanceName: String, request: WorkbenchUpdateRequest): WorkbenchResponse {
+    logger.info("AUDIT | operation=UPDATE | userId={} | instanceName={} | status=INITIATED", userId, instanceName)
+
     val entity = repository.findByUserIdAndInstanceName(userId, instanceName)
-      ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+      ?: run {
+        logAudit(
+          operation = AuditOperation.UPDATE,
+          userId = userId,
+          instanceName = instanceName,
+          status = "FAILED",
+          details = mapOf("reason" to "Workbench not found")
+        )
+        throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
+      }
 
     val updatedEntity = entity.copy(
       image = request.image ?: entity.image,
@@ -212,6 +413,16 @@ class WorkbenchService(
       updatedAt = Instant.now()
     )
 
+    // Build change details for audit
+    val changes = buildMap<String, Any> {
+      request.image?.let { if (it != entity.image) put("image", mapOf("from" to entity.image, "to" to it)) }
+      request.resources?.cpuRequest?.let { if (it != entity.cpuRequest) put("cpuRequest", mapOf("from" to entity.cpuRequest, "to" to it)) }
+      request.resources?.cpuLimit?.let { if (it != entity.cpuLimit) put("cpuLimit", mapOf("from" to entity.cpuLimit, "to" to it)) }
+      request.resources?.memoryRequest?.let { if (it != entity.memoryRequest) put("memoryRequest", mapOf("from" to entity.memoryRequest, "to" to it)) }
+      request.resources?.memoryLimit?.let { if (it != entity.memoryLimit) put("memoryLimit", mapOf("from" to entity.memoryLimit, "to" to it)) }
+      request.resources?.storageSize?.let { if (it != entity.storageSize) put("storageSize", mapOf("from" to entity.storageSize, "to" to it)) }
+    }
+
     val templateModel = buildTemplateModel(updatedEntity)
 
     // First, update K8s resources
@@ -223,6 +434,14 @@ class WorkbenchService(
       applyYaml(serviceYaml, updatedEntity.namespace)
     } catch (ex: Exception) {
       logger.error("Failed to update K8s resources for workbench ${entity.instanceId}, rolling back", ex)
+      logAudit(
+        operation = AuditOperation.UPDATE,
+        userId = userId,
+        instanceId = entity.instanceId,
+        instanceName = instanceName,
+        status = "FAILED",
+        details = mapOf("reason" to "Failed to update K8s resources: ${ex.message}")
+      )
       // Rollback by reapplying old configuration
       try {
         val oldTemplateModel = buildTemplateModel(entity)
@@ -240,6 +459,15 @@ class WorkbenchService(
     val savedEntity = transactionTemplate.execute {
       repository.save(updatedEntity)
     }!!
+
+    logAudit(
+      operation = AuditOperation.UPDATE,
+      userId = userId,
+      instanceId = entity.instanceId,
+      instanceName = instanceName,
+      status = "SUCCESS",
+      details = if (changes.isNotEmpty()) mapOf("changes" to changes) else emptyMap()
+    )
 
     return toResponse(savedEntity)
   }
