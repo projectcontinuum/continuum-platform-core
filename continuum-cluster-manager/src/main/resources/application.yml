@@ -17,8 +17,8 @@ spring:
 continuum.core:
   cluster-manager:
     kubernetes:
-      master-url: ${KUBERNETES_MASTER_URL:http://kubernetes.default.svc}
-      kubeconfig: ${KUBECONFIG:~/.kube/config}
+      master-url: ${KUBERNETES_MASTER_URL:}
+      kubeconfig: ${KUBECONFIG:}
     workbench:
       default-image: ${WORKBENCH_DEFAULT_IMAGE:theiaide/theia:latest}
       default-namespace: ${WORKBENCH_DEFAULT_NAMESPACE:default}

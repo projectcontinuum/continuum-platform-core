@@ -10,6 +10,8 @@ import org.projectcontinuum.core.cluster.manager.model.*
 import org.projectcontinuum.core.cluster.manager.repository.WorkbenchInstanceRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import org.springframework.transaction.annotation.Transactional
+import org.springframework.transaction.support.TransactionTemplate
 import java.io.StringWriter
 import java.time.Instant
 import java.util.UUID
@@ -18,7 +20,8 @@ import java.util.UUID
 class WorkbenchService(
   private val repository: WorkbenchInstanceRepository,
   private val kubernetesClient: KubernetesClient,
-  private val freemarkerConfig: Configuration
+  private val freemarkerConfig: Configuration,
+  private val transactionTemplate: TransactionTemplate
 ) {
 
   private val logger = LoggerFactory.getLogger(WorkbenchService::class.java)
@@ -26,14 +29,15 @@ class WorkbenchService(
 
   fun createWorkbench(userId: String, request: WorkbenchCreateRequest): WorkbenchResponse {
     val existing = repository.findByUserIdAndInstanceName(userId, request.instanceName)
-    if (existing != null && existing.status != WorkbenchStatus.TERMINATING.name) {
+    val activeStatuses = setOf(WorkbenchStatus.RUNNING.name, WorkbenchStatus.SUSPENDED.name)
+    if (existing != null && existing.status in activeStatuses) {
       throw IllegalArgumentException("Workbench '${request.instanceName}' already exists for user '$userId'")
     }
 
     val instanceId = UUID.randomUUID()
     val now = Instant.now()
 
-    var entity = WorkbenchInstanceEntity(
+    val entity = WorkbenchInstanceEntity(
       instanceId = instanceId,
       instanceName = request.instanceName,
       namespace = request.namespace,
@@ -50,12 +54,11 @@ class WorkbenchService(
       updatedAt = now
     )
 
-    entity = repository.save(entity)
-
     val templateModel = buildTemplateModel(entity)
     val k8sResourceIds = mutableListOf<String>()
 
     try {
+      // First, create all K8s resources
       val pvcYaml = renderTemplate("pvc.ftl", templateModel)
       applyYaml(pvcYaml, request.namespace)
       k8sResourceIds.add("persistentvolumeclaim/wb-${instanceId}-pvc")
@@ -68,22 +71,21 @@ class WorkbenchService(
       applyYaml(serviceYaml, request.namespace)
       k8sResourceIds.add("service/wb-${instanceId}-svc")
 
-      val updatedEntity = entity.copy(
-        status = WorkbenchStatus.RUNNING.name,
-        k8sResources = objectMapper.writeValueAsString(k8sResourceIds),
-        updatedAt = Instant.now()
-      )
-      repository.save(updatedEntity)
+      // Only save to DB after all K8s resources are successfully created
+      val savedEntity = transactionTemplate.execute {
+        val entityToSave = entity.copy(
+          status = WorkbenchStatus.RUNNING.name,
+          k8sResources = objectMapper.writeValueAsString(k8sResourceIds),
+          updatedAt = Instant.now()
+        )
+        repository.save(entityToSave)
+      }!!
 
-      return toResponse(updatedEntity)
+      return toResponse(savedEntity)
     } catch (ex: Exception) {
-      logger.error("Failed to create K8s resources for workbench $instanceId", ex)
-      val failedEntity = entity.copy(
-        status = WorkbenchStatus.FAILED.name,
-        k8sResources = objectMapper.writeValueAsString(k8sResourceIds),
-        updatedAt = Instant.now()
-      )
-      repository.save(failedEntity)
+      logger.error("Failed to create K8s resources for workbench $instanceId, rolling back", ex)
+      // Rollback K8s resources that were created
+      rollbackK8sResources(k8sResourceIds, request.namespace)
       throw ex
     }
   }
@@ -108,25 +110,25 @@ class WorkbenchService(
       repository.findByUserIdAndInstanceName(userId, instanceName)
     } ?: throw WorkbenchNotFoundException("Workbench '$instanceName' not found for user '$userId'")
 
-    val terminatingEntity = entity.copy(
-      status = WorkbenchStatus.TERMINATING.name,
-      updatedAt = Instant.now()
-    )
-    val saved = repository.save(terminatingEntity)
-
+    // First, delete K8s resources
     try {
       deleteK8sResourcesByLabel(entity.instanceId.toString(), entity.namespace)
     } catch (ex: Exception) {
       logger.error("Failed to delete K8s resources for workbench ${entity.instanceId}", ex)
+      throw ex
     }
 
-    val deletedEntity = saved.copy(
-      status = WorkbenchStatus.DELETED.name,
-      updatedAt = Instant.now()
-    )
-    repository.save(deletedEntity)
+    // Only update DB after K8s resources are successfully deleted
+    transactionTemplate.execute {
+      val deletedEntity = entity.copy(
+        status = WorkbenchStatus.DELETED.name,
+        updatedAt = Instant.now()
+      )
+      repository.save(deletedEntity)
+    }
   }
 
+  @Transactional(readOnly = true)
   fun listWorkbenches(userId: String, namespace: String?): List<WorkbenchResponse> {
     val entities = if (namespace != null) {
       repository.findByUserIdAndNamespace(userId, namespace)
@@ -148,17 +150,22 @@ class WorkbenchService(
       throw IllegalArgumentException("Workbench '$instanceName' is already suspended")
     }
 
+    // First, suspend K8s resources (delete deployment and service, keep PVC)
     try {
       suspendK8sResources(entity.instanceId.toString(), entity.namespace)
     } catch (ex: Exception) {
       logger.error("Failed to suspend K8s resources for workbench ${entity.instanceId}", ex)
+      throw ex
     }
 
-    val suspendedEntity = entity.copy(
-      status = WorkbenchStatus.SUSPENDED.name,
-      updatedAt = Instant.now()
-    )
-    repository.save(suspendedEntity)
+    // Only update DB after K8s resources are successfully suspended
+    val suspendedEntity = transactionTemplate.execute {
+      val entityToSave = entity.copy(
+        status = WorkbenchStatus.SUSPENDED.name,
+        updatedAt = Instant.now()
+      )
+      repository.save(entityToSave)
+    }!!
 
     return toResponse(suspendedEntity)
   }
@@ -177,6 +184,7 @@ class WorkbenchService(
 
     val templateModel = buildTemplateModel(entity)
 
+    // First, recreate K8s resources
     try {
       val deploymentYaml = renderTemplate("deployment.ftl", templateModel)
       applyYaml(deploymentYaml, entity.namespace)
@@ -184,15 +192,24 @@ class WorkbenchService(
       val serviceYaml = renderTemplate("service.ftl", templateModel)
       applyYaml(serviceYaml, entity.namespace)
     } catch (ex: Exception) {
-      logger.error("Failed to resume K8s resources for workbench ${entity.instanceId}", ex)
+      logger.error("Failed to resume K8s resources for workbench ${entity.instanceId}, rolling back", ex)
+      // Rollback any partially created resources
+      try {
+        suspendK8sResources(entity.instanceId.toString(), entity.namespace)
+      } catch (rollbackEx: Exception) {
+        logger.error("Failed to rollback K8s resources during resume failure", rollbackEx)
+      }
       throw ex
     }
 
-    val resumedEntity = entity.copy(
-      status = WorkbenchStatus.RUNNING.name,
-      updatedAt = Instant.now()
-    )
-    repository.save(resumedEntity)
+    // Only update DB after K8s resources are successfully created
+    val resumedEntity = transactionTemplate.execute {
+      val entityToSave = entity.copy(
+        status = WorkbenchStatus.RUNNING.name,
+        updatedAt = Instant.now()
+      )
+      repository.save(entityToSave)
+    }!!
 
     return toResponse(resumedEntity)
   }
@@ -216,17 +233,36 @@ class WorkbenchService(
       updatedAt = Instant.now()
     )
 
-    repository.save(updatedEntity)
-
     val templateModel = buildTemplateModel(updatedEntity)
 
-    val deploymentYaml = renderTemplate("deployment.ftl", templateModel)
-    applyYaml(deploymentYaml, updatedEntity.namespace)
+    // First, update K8s resources
+    try {
+      val deploymentYaml = renderTemplate("deployment.ftl", templateModel)
+      applyYaml(deploymentYaml, updatedEntity.namespace)
 
-    val serviceYaml = renderTemplate("service.ftl", templateModel)
-    applyYaml(serviceYaml, updatedEntity.namespace)
+      val serviceYaml = renderTemplate("service.ftl", templateModel)
+      applyYaml(serviceYaml, updatedEntity.namespace)
+    } catch (ex: Exception) {
+      logger.error("Failed to update K8s resources for workbench ${entity.instanceId}, rolling back", ex)
+      // Rollback by reapplying old configuration
+      try {
+        val oldTemplateModel = buildTemplateModel(entity)
+        val oldDeploymentYaml = renderTemplate("deployment.ftl", oldTemplateModel)
+        applyYaml(oldDeploymentYaml, entity.namespace)
+        val oldServiceYaml = renderTemplate("service.ftl", oldTemplateModel)
+        applyYaml(oldServiceYaml, entity.namespace)
+      } catch (rollbackEx: Exception) {
+        logger.error("Failed to rollback K8s resources during update failure", rollbackEx)
+      }
+      throw ex
+    }
 
-    return toResponse(updatedEntity)
+    // Only save to DB after K8s resources are successfully updated
+    val savedEntity = transactionTemplate.execute {
+      repository.save(updatedEntity)
+    }!!
+
+    return toResponse(savedEntity)
   }
 
   private fun refreshStatusFromK8s(entity: WorkbenchInstanceEntity): WorkbenchInstanceEntity {
@@ -253,6 +289,27 @@ class WorkbenchService(
     } catch (ex: Exception) {
       logger.warn("Could not refresh K8s status for workbench ${entity.instanceId}", ex)
       entity
+    }
+  }
+
+  private fun rollbackK8sResources(resourceIds: List<String>, namespace: String) {
+    for (resourceId in resourceIds.reversed()) {
+      try {
+        val parts = resourceId.split("/")
+        if (parts.size != 2) continue
+        val (kind, name) = parts
+        when (kind) {
+          "persistentvolumeclaim" -> kubernetesClient.persistentVolumeClaims()
+            .inNamespace(namespace).withName(name).delete()
+          "deployment" -> kubernetesClient.apps().deployments()
+            .inNamespace(namespace).withName(name).delete()
+          "service" -> kubernetesClient.services()
+            .inNamespace(namespace).withName(name).delete()
+        }
+        logger.info("Rolled back K8s resource: $resourceId")
+      } catch (ex: Exception) {
+        logger.warn("Failed to rollback K8s resource: $resourceId", ex)
+      }
     }
   }
 

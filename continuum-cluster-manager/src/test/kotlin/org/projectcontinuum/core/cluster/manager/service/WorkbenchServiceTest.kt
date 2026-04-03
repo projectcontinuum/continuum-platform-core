@@ -17,6 +17,7 @@ import org.projectcontinuum.core.cluster.manager.repository.WorkbenchInstanceRep
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
+import org.springframework.transaction.support.TransactionTemplate
 import java.time.Instant
 import java.util.UUID
 
@@ -27,6 +28,9 @@ class WorkbenchServiceTest {
 
   @Autowired
   private lateinit var repository: WorkbenchInstanceRepository
+
+  @Autowired
+  private lateinit var transactionTemplate: TransactionTemplate
 
   lateinit var client: KubernetesClient
   lateinit var server: KubernetesMockServer
@@ -41,7 +45,7 @@ class WorkbenchServiceTest {
     freemarkerConfig.setClassLoaderForTemplateLoading(this::class.java.classLoader, "/templates")
     freemarkerConfig.defaultEncoding = "UTF-8"
 
-    service = WorkbenchService(repository, client, freemarkerConfig)
+    service = WorkbenchService(repository, client, freemarkerConfig, transactionTemplate)
   }
 
   private fun createSampleEntity(

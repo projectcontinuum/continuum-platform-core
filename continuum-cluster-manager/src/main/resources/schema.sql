@@ -16,3 +16,7 @@ CREATE TABLE IF NOT EXISTS workbench_instances (
     updated_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     entity_version      BIGINT       NOT NULL DEFAULT 0
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_active_workbench
+    ON workbench_instances (user_id, instance_name)
+    WHERE status NOT IN ('DELETED', 'TERMINATING');
