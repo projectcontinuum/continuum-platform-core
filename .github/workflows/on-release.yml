@@ -40,6 +40,9 @@ jobs:
           - module: continuum-cluster-manager
             publish_to_maven: false
             publish_to_docker_hub: true
+          - module: landing-page
+            publish_to_maven: false
+            publish_to_docker_hub: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
