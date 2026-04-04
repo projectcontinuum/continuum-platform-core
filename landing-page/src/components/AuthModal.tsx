@@ -9,12 +9,12 @@ interface AuthModalProps {
   embedded?: boolean;
 }
 
-// Auth configuration - OAuth2 Proxy endpoint
+// Auth configuration - using server-side routes for OAuth flow
 const AUTH_CONFIG = {
-  // OAuth2 Proxy base URL
-  authBaseUrl: import.meta.env.VITE_AUTH_BASE_URL || 'https://auth.192.168.49.2.nip.io',
-  // URL to redirect to after successful authentication
-  redirectUrl: import.meta.env.VITE_AUTH_REDIRECT_URL || window.location.origin,
+  // Server-side auth start endpoint - handles the OAuth2 flow with IdP hints
+  authStartUrl: '/auth/start',
+  // Direct IdP login endpoint (alternative approach)
+  authIdpUrl: '/auth/idp',
 };
 
 // SSO Provider configurations
@@ -89,22 +89,18 @@ const SSO_PROVIDERS = [
 ];
 
 /**
- * Build the OAuth2 Proxy sign-in URL with optional IdP hint for Keycloak
+ * Build the server-side auth URL with the IdP hint
+ * The Express server will handle the OAuth2 flow with proper state management
  * @param idpHint - The Keycloak identity provider alias (e.g., 'google', 'github')
- * @param redirectUrl - URL to redirect to after successful authentication
  */
-function buildAuthUrl(idpHint?: string, redirectUrl?: string): string {
-  const params = new URLSearchParams();
-
-  // Set the redirect destination after authentication
-  params.set('rd', redirectUrl || AUTH_CONFIG.redirectUrl);
-
-  // If IdP hint is provided, Keycloak will skip its login page and go directly to the IdP
+function buildAuthUrl(idpHint?: string): string {
   if (idpHint) {
-    params.set('kc_idp_hint', idpHint);
+    // Use server-side route that handles the OAuth2 flow with IdP hints
+    return `${AUTH_CONFIG.authStartUrl}?idp=${encodeURIComponent(idpHint)}`;
   }
-
-  return `${AUTH_CONFIG.authBaseUrl}/oauth2/start?${params.toString()}`;
+  // No IdP hint - let Keycloak show its login page
+  // This goes through the direct IdP endpoint for the default flow
+  return `${AUTH_CONFIG.authIdpUrl}/keycloak`;
 }
 
 export default function AuthModal({ isOpen, onClose, mode, onSwitchMode, embedded = false }: AuthModalProps) {
@@ -119,11 +115,13 @@ export default function AuthModal({ isOpen, onClose, mode, onSwitchMode, embedde
 
     try {
       // Build the auth URL with the IdP hint
+      // The Express server will handle the OAuth2 flow
       const authUrl = buildAuthUrl(provider.keycloakIdpHint);
 
       console.log(`Initiating SSO login with ${provider.name}`, { authUrl });
 
-      // Redirect to OAuth2 Proxy which will handle the Keycloak flow
+      // Redirect to our Express server's auth endpoint
+      // The server will handle the OAuth2 Proxy -> Keycloak flow with proper state
       window.location.href = authUrl;
     } catch (err) {
       setError('Failed to initiate sign-in. Please try again.');
@@ -134,7 +132,7 @@ export default function AuthModal({ isOpen, onClose, mode, onSwitchMode, embedde
   // Handle sign in with email/password (Keycloak's built-in form)
   const handleEmailSignIn = () => {
     setIsLoading(true);
-    // No IdP hint - Keycloak will show its default login form
+    // No IdP hint - redirect to server which will trigger Keycloak's login form
     window.location.href = buildAuthUrl();
   };
 

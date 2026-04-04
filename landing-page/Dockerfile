@@ -1,24 +1,43 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
+
+# Copy package files
 COPY package.json package-lock.json ./
 RUN npm ci
+
+# Copy source files
 COPY . .
-RUN npm run build
 
-FROM nginx:alpine AS production
+# Build frontend (Vite) and server (TypeScript)
+RUN npm run build:all
 
-# Create nginx user and set permissions for non-root operation
-RUN chown -R nginx:nginx /var/cache/nginx && \
-    chown -R nginx:nginx /var/log/nginx && \
-    touch /var/run/nginx.pid && \
-    chown -R nginx:nginx /var/run/nginx.pid
+# Production image
+FROM node:22-alpine AS production
+WORKDIR /app
 
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/nginx.conf
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
+
+# Copy package files for production dependencies
+COPY package.json package-lock.json ./
+RUN npm ci --only=production
+
+# Copy built frontend
+COPY --from=builder /app/dist ./dist
+
+# Copy built server
+COPY --from=builder /app/dist-server ./dist-server
 
 # Switch to non-root user
-USER nginx
+USER nodejs
 
+# Expose port
 EXPOSE 8080
-CMD ["nginx", "-g", "daemon off;"]
 
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=8080
+
+# Start the Express server
+CMD ["node", "dist-server/index.js"]
