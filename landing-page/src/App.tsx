@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import AuthModal from './components/AuthModal';
+import WelcomeScreen, { UserInfo } from './components/WelcomeScreen';
 
 function useTheme() {
   const [isDark, setIsDark] = useState(
@@ -38,10 +39,48 @@ function useMousePosition() {
   return mousePosition;
 }
 
+// Hook to check authentication status and get user info
+function useAuth() {
+  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<UserInfo | null>(null);
+
+  const checkAuth = useCallback(async () => {
+    try {
+      const response = await fetch('/api/auth/userinfo');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.authenticated && data.user) {
+          setUser(data.user);
+        } else {
+          setUser(null);
+        }
+      } else {
+        setUser(null);
+      }
+    } catch (error) {
+      console.error('Error checking auth:', error);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  const signOut = useCallback(() => {
+    window.location.href = '/auth/signout';
+  }, []);
+
+  return { isLoading, user, isAuthenticated: !!user, signOut, checkAuth };
+}
+
 export default function App() {
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
   const { isDark, toggle } = useTheme();
   const mousePosition = useMousePosition();
+  const { isLoading, user, isAuthenticated, signOut } = useAuth();
 
   // Calculate light position relative to center (for shadow effect)
   const lightOffsetX = (mousePosition.x - 0.5) * 100; // -50 to 50
@@ -55,6 +94,15 @@ export default function App() {
   const glowX = lightOffsetX * 0.6;
   const glowY = lightOffsetY * 0.6;
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-accent border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -65,28 +113,48 @@ export default function App() {
             Continuum
           </a>
 
-          {/* Theme toggle */}
-          <button
-            type="button"
-            onClick={toggle}
-            aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-            className="flex h-10 w-10 items-center justify-center rounded-lg text-fg-muted transition-colors hover:text-fg hover:bg-overlay/10"
-          >
-            {isDark ? (
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <circle cx="12" cy="12" r="5" />
-                <path strokeLinecap="round" d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
-              </svg>
-            ) : (
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
-              </svg>
+          <div className="flex items-center gap-2">
+            {/* User avatar (if logged in) */}
+            {isAuthenticated && user && (
+              <div className="flex items-center gap-3 mr-2">
+                {user.picture ? (
+                  <img
+                    src={user.picture}
+                    alt={user.name}
+                    className="w-8 h-8 rounded-full border-2 border-accent/20"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center text-accent text-sm font-bold">
+                    {user.name?.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
             )}
-          </button>
+
+            {/* Theme toggle */}
+            <button
+              type="button"
+              onClick={toggle}
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="flex h-10 w-10 items-center justify-center rounded-lg text-fg-muted transition-colors hover:text-fg hover:bg-overlay/10"
+            >
+              {isDark ? (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <circle cx="12" cy="12" r="5" />
+                  <path strokeLinecap="round" d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+                </svg>
+              )}
+            </button>
+          </div>
         </nav>
       </header>
 
-      {/* Main content - centered sign in */}
+      {/* Main content - centered sign in or welcome */}
       <main className="flex-1 flex items-center justify-center px-4">
         <div className="w-full max-w-md">
           {/* Static background ambient */}
@@ -105,14 +173,20 @@ export default function App() {
               <img src="/Logo.png" alt="Continuum" className="h-10 w-10" />
             </div>
             <h1 className="text-3xl font-bold mb-2">
-              Welcome to <span className="text-gradient">Continuum</span>
+              {isAuthenticated ? (
+                <>Welcome to <span className="text-gradient">Continuum</span></>
+              ) : (
+                <>Welcome to <span className="text-gradient">Continuum</span></>
+              )}
             </h1>
             <p className="text-fg-muted">
-              Sign in to access the visual workflow platform
+              {isAuthenticated
+                ? 'You are signed in and ready to go'
+                : 'Sign in to access the visual workflow platform'}
             </p>
           </motion.div>
 
-          {/* Sign-in card with dynamic lighting */}
+          {/* Card with dynamic shadow */}
           <motion.div
             className="relative z-10"
             initial={{ opacity: 0, y: 20 }}
@@ -136,7 +210,7 @@ export default function App() {
               }}
             />
 
-            {/* Card with dynamic shadow - multiple layers for depth, enhanced for light mode visibility */}
+            {/* Card with dynamic shadow */}
             <motion.div
               className="relative bg-card rounded-2xl border border-divider p-8"
               animate={{
@@ -154,27 +228,33 @@ export default function App() {
                 ease: 'easeOut',
               }}
             >
-              <AuthModal
-                isOpen={true}
-                onClose={() => {}}
-                mode={authMode}
-                onSwitchMode={setAuthMode}
-                embedded={true}
-              />
+              {isAuthenticated && user ? (
+                <WelcomeScreen user={user} onSignOut={signOut} />
+              ) : (
+                <AuthModal
+                  isOpen={true}
+                  onClose={() => {}}
+                  mode={authMode}
+                  onSwitchMode={setAuthMode}
+                  embedded={true}
+                />
+              )}
             </motion.div>
           </motion.div>
 
-          <motion.p
-            className="relative z-10 mt-6 text-center text-sm text-fg-muted"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            By signing in, you agree to our{' '}
-            <a href="#" className="text-accent hover:underline">Terms of Service</a>
-            {' '}and{' '}
-            <a href="#" className="text-accent hover:underline">Privacy Policy</a>
-          </motion.p>
+          {!isAuthenticated && (
+            <motion.p
+              className="relative z-10 mt-6 text-center text-sm text-fg-muted"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+            >
+              By signing in, you agree to our{' '}
+              <a href="#" className="text-accent hover:underline">Terms of Service</a>
+              {' '}and{' '}
+              <a href="#" className="text-accent hover:underline">Privacy Policy</a>
+            </motion.p>
+          )}
         </div>
       </main>
 

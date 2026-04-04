@@ -238,6 +238,62 @@ app.get('/api/auth/config', (_req: Request, res: Response) => {
 });
 
 // ============================================================================
+// API endpoint to get current user info
+// ============================================================================
+// This endpoint proxies to OAuth2 Proxy's userinfo endpoint to get the
+// authenticated user's information (name, email, picture, etc.)
+
+interface OIDCUserInfo {
+  email?: string;
+  name?: string;
+  picture?: string;
+  preferred_username?: string;
+  given_name?: string;
+  family_name?: string;
+  sub?: string;
+}
+
+app.get('/api/auth/userinfo', async (req: Request, res: Response) => {
+  try {
+    // Forward the request to OAuth2 Proxy's userinfo endpoint
+    // OAuth2 Proxy will validate the session cookie and return user info
+    const userinfoUrl = `${config.publicAuthUrl}/oauth2/userinfo`;
+
+    // Forward cookies to OAuth2 Proxy
+    const cookies = req.headers.cookie || '';
+
+    const response = await fetch(userinfoUrl, {
+      headers: {
+        'Cookie': cookies,
+      },
+    });
+
+    if (!response.ok) {
+      // User is not authenticated
+      return res.status(401).json({ authenticated: false });
+    }
+
+    const userinfo = await response.json() as OIDCUserInfo;
+
+    // Return user info with authenticated flag
+    res.json({
+      authenticated: true,
+      user: {
+        email: userinfo.email,
+        name: userinfo.name || userinfo.preferred_username || userinfo.email?.split('@')[0],
+        picture: userinfo.picture,
+        preferredUsername: userinfo.preferred_username,
+        givenName: userinfo.given_name,
+        familyName: userinfo.family_name,
+      },
+    });
+  } catch (error) {
+    console.error('[api/auth/userinfo] Error fetching user info:', error);
+    res.status(401).json({ authenticated: false });
+  }
+});
+
+// ============================================================================
 // SPA Fallback - serve index.html for all other routes
 // ============================================================================
 app.get('*', (_req: Request, res: Response) => {
