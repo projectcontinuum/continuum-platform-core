@@ -9,11 +9,21 @@ interface AuthModalProps {
   embedded?: boolean;
 }
 
+// Auth configuration - OAuth2 Proxy endpoint
+const AUTH_CONFIG = {
+  // OAuth2 Proxy base URL
+  authBaseUrl: import.meta.env.VITE_AUTH_BASE_URL || 'https://auth.192.168.49.2.nip.io',
+  // URL to redirect to after successful authentication
+  redirectUrl: import.meta.env.VITE_AUTH_REDIRECT_URL || window.location.origin,
+};
+
 // SSO Provider configurations
 const SSO_PROVIDERS = [
   {
     id: 'google',
     name: 'Google',
+    // The IdP alias configured in Keycloak
+    keycloakIdpHint: 'google',
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24">
         <path
@@ -39,6 +49,7 @@ const SSO_PROVIDERS = [
   {
     id: 'github',
     name: 'GitHub',
+    keycloakIdpHint: 'github',
     icon: (
       <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
         <path
@@ -53,6 +64,7 @@ const SSO_PROVIDERS = [
   {
     id: 'microsoft',
     name: 'Microsoft',
+    keycloakIdpHint: 'microsoft',
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24">
         <path fill="#F25022" d="M1 1h10v10H1z" />
@@ -66,6 +78,7 @@ const SSO_PROVIDERS = [
   {
     id: 'linkedin',
     name: 'LinkedIn',
+    keycloakIdpHint: 'linkedin',
     icon: (
       <svg className="h-5 w-5" fill="#0A66C2" viewBox="0 0 24 24">
         <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
@@ -75,24 +88,54 @@ const SSO_PROVIDERS = [
   },
 ];
 
+/**
+ * Build the OAuth2 Proxy sign-in URL with optional IdP hint for Keycloak
+ * @param idpHint - The Keycloak identity provider alias (e.g., 'google', 'github')
+ * @param redirectUrl - URL to redirect to after successful authentication
+ */
+function buildAuthUrl(idpHint?: string, redirectUrl?: string): string {
+  const params = new URLSearchParams();
+
+  // Set the redirect destination after authentication
+  params.set('rd', redirectUrl || AUTH_CONFIG.redirectUrl);
+
+  // If IdP hint is provided, Keycloak will skip its login page and go directly to the IdP
+  if (idpHint) {
+    params.set('kc_idp_hint', idpHint);
+  }
+
+  return `${AUTH_CONFIG.authBaseUrl}/oauth2/start?${params.toString()}`;
+}
+
 export default function AuthModal({ isOpen, onClose, mode, onSwitchMode, embedded = false }: AuthModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen && !embedded) return null;
 
-  const handleSSOLogin = async (providerId: string) => {
+  const handleSSOLogin = async (provider: typeof SSO_PROVIDERS[0]) => {
     setIsLoading(true);
     setError(null);
 
-    // In a real implementation, this would redirect to the OAuth provider
-    console.log(`Initiating SSO login with ${providerId}`);
+    try {
+      // Build the auth URL with the IdP hint
+      const authUrl = buildAuthUrl(provider.keycloakIdpHint);
 
-    // Redirect to OAuth endpoint
-    // In production, this would be your backend OAuth route
-    setTimeout(() => {
-      window.location.href = `/api/auth/${providerId}`;
-    }, 300);
+      console.log(`Initiating SSO login with ${provider.name}`, { authUrl });
+
+      // Redirect to OAuth2 Proxy which will handle the Keycloak flow
+      window.location.href = authUrl;
+    } catch (err) {
+      setError('Failed to initiate sign-in. Please try again.');
+      setIsLoading(false);
+    }
+  };
+
+  // Handle sign in with email/password (Keycloak's built-in form)
+  const handleEmailSignIn = () => {
+    setIsLoading(true);
+    // No IdP hint - Keycloak will show its default login form
+    window.location.href = buildAuthUrl();
   };
 
   // Embedded content (no modal wrapper)
@@ -110,7 +153,7 @@ export default function AuthModal({ isOpen, onClose, mode, onSwitchMode, embedde
         {SSO_PROVIDERS.map((provider) => (
           <button
             key={provider.id}
-            onClick={() => handleSSOLogin(provider.id)}
+            onClick={() => handleSSOLogin(provider)}
             disabled={isLoading}
             className={`flex items-center justify-center gap-3 w-full px-4 py-3 rounded-lg border border-divider bg-base font-medium transition-all duration-200 ${provider.color} disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md`}
           >
@@ -120,6 +163,28 @@ export default function AuthModal({ isOpen, onClose, mode, onSwitchMode, embedde
         ))}
       </div>
 
+      {/* Divider */}
+      <div className="relative my-6">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-divider" />
+        </div>
+        <div className="relative flex justify-center text-sm">
+          <span className="px-2 bg-card text-fg-muted">or</span>
+        </div>
+      </div>
+
+      {/* Email/Password Sign In (Keycloak form) */}
+      <button
+        onClick={handleEmailSignIn}
+        disabled={isLoading}
+        className="flex items-center justify-center gap-3 w-full px-4 py-3 rounded-lg border border-divider bg-base font-medium transition-all duration-200 hover:bg-overlay/5 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-md"
+      >
+        <svg className="h-5 w-5 text-fg-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+        </svg>
+        <span>Continue with Email</span>
+      </button>
+
       {/* Loading overlay */}
       {isLoading && (
         <div className="mt-4 flex items-center justify-center gap-2 text-fg-muted">
@@ -127,7 +192,7 @@ export default function AuthModal({ isOpen, onClose, mode, onSwitchMode, embedde
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
           </svg>
-          <span>Redirecting...</span>
+          <span>Redirecting to sign in...</span>
         </div>
       )}
 
