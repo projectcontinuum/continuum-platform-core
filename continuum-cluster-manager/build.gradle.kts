@@ -24,6 +24,7 @@ dependencies {
   implementation("org.springframework.boot:spring-boot-starter")
   implementation("org.jetbrains.kotlin:kotlin-reflect")
   implementation("org.springframework.boot:spring-boot-starter-web")
+  implementation("org.springframework.boot:spring-boot-starter-websocket")
   implementation("org.springframework.boot:spring-boot-starter-actuator")
 
   // Swagger-UI Dependencies
@@ -37,6 +38,9 @@ dependencies {
 
   // JSON
   implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+
+  // Spring Cloud Gateway Server MVC (servlet-based reverse proxy)
+  implementation("org.springframework.cloud:spring-cloud-gateway-server-mvc")
 
   // Database
   implementation("org.springframework.boot:spring-boot-starter-data-jdbc")
@@ -52,6 +56,9 @@ dependencies {
 }
 
 dependencyManagement {
+  imports {
+    mavenBom("org.springframework.cloud:spring-cloud-dependencies:2024.0.1")
+  }
 }
 
 kotlin {

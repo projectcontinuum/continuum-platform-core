@@ -25,3 +25,13 @@ continuum.core:
 
 springdoc:
   packages-to-scan: org.projectcontinuum.core.cluster.manager.controller
+
+# Spring Cloud Gateway Server MVC configuration
+spring.cloud.gateway.mvc:
+  enabled: true
+
+logging:
+  level:
+    org.projectcontinuum.core.cluster.manager.service.WorkbenchProxyService: DEBUG
+    org.projectcontinuum.core.cluster.manager.service.WorkbenchWebSocketProxyHandler: DEBUG
+
