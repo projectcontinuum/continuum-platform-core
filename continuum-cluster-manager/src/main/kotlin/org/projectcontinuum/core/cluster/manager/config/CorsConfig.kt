@@ -3,6 +3,7 @@ package org.projectcontinuum.core.cluster.manager.config
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.web.servlet.config.annotation.CorsRegistry
+import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 
@@ -18,8 +19,13 @@ class CorsConfig {
           .allowedHeaders("*")
       }
 
+      override fun addResourceHandlers(registry: ResourceHandlerRegistry) {
+        registry.addResourceHandler("/ui/**")
+          .addResourceLocations("classpath:/static/")
+      }
+
       override fun addViewControllers(registry: ViewControllerRegistry) {
-        registry.addRedirectViewController("/", "/swagger-ui/index.html")
+        registry.addRedirectViewController("/", "/ui/")
       }
     }
   }
