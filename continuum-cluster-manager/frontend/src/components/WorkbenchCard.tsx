@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { WorkbenchResponse } from '../types/api';
 import { StatusBadge } from './StatusBadge';
 import { Button } from './Button';
@@ -16,6 +16,7 @@ interface WorkbenchCardProps {
 export function WorkbenchCard({ workbench, onSuspend, onResume, onDelete, onOpen }: WorkbenchCardProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   const handleAction = async (action: string, handler: () => Promise<void>) => {
     setLoading(action);
@@ -41,7 +42,6 @@ export function WorkbenchCard({ workbench, onSuspend, onResume, onDelete, onOpen
   return (
     <>
       <motion.article
-        layout
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
@@ -53,13 +53,13 @@ export function WorkbenchCard({ workbench, onSuspend, onResume, onDelete, onOpen
           <div>
             <h3 className="text-lg font-semibold text-fg">{workbench.instanceName}</h3>
             <p className="mt-1 text-xs text-fg-muted">
-              ID: {workbench.instanceId.slice(0, 8)}...
+              Created {formatDate(workbench.createdAt)}
             </p>
           </div>
           <StatusBadge status={workbench.status} />
         </div>
 
-        {/* Details */}
+        {/* Key Details */}
         <div className="mb-4 space-y-2 text-sm">
           <div className="flex items-center justify-between">
             <span className="text-fg-muted">Image:</span>
@@ -77,19 +77,69 @@ export function WorkbenchCard({ workbench, onSuspend, onResume, onDelete, onOpen
             <span className="text-fg-muted">Storage:</span>
             <span className="text-fg">{workbench.resources.storageSize}</span>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-fg-muted">Created:</span>
-            <span className="text-fg">{formatDate(workbench.createdAt)}</span>
-          </div>
         </div>
 
-        {/* Service Endpoint */}
-        {workbench.serviceEndpoint && isRunning && (
-          <div className="mb-4 rounded-lg bg-surface/50 p-2">
-            <p className="text-xs text-fg-muted">Service Endpoint:</p>
-            <code className="text-xs text-accent break-all">{workbench.serviceEndpoint}</code>
-          </div>
-        )}
+        {/* Expandable Details */}
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="mb-3 flex w-full items-center gap-1.5 text-xs text-fg-muted hover:text-accent transition-colors"
+        >
+          <svg
+            className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+          {expanded ? 'Hide details' : 'More details'}
+        </button>
+
+        <AnimatePresence initial={false}>
+          {expanded && (
+            <motion.div
+              key="details"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeInOut' }}
+              className="overflow-hidden"
+            >
+              <div className="mb-4 space-y-2 rounded-lg bg-surface/50 p-3 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-fg-muted">Instance ID:</span>
+              <code className="text-fg select-all" title={workbench.instanceId}>
+                {workbench.instanceId}
+              </code>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-fg-muted">Namespace:</span>
+              <span className="text-fg">{workbench.namespace}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-fg-muted">CPU Limit:</span>
+              <span className="text-fg">{workbench.resources.cpuLimit}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-fg-muted">Memory Limit:</span>
+              <span className="text-fg">{workbench.resources.memoryLimit}</span>
+            </div>
+            {workbench.serviceEndpoint && (
+              <div>
+                <span className="text-fg-muted">Service Endpoint:</span>
+                <code className="mt-1 block break-all text-accent">{workbench.serviceEndpoint}</code>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-fg-muted">Updated:</span>
+              <span className="text-fg">{formatDate(workbench.updatedAt)}</span>
+            </div>
+            </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2">
@@ -184,4 +234,3 @@ export function WorkbenchCard({ workbench, onSuspend, onResume, onDelete, onOpen
     </>
   );
 }
-
