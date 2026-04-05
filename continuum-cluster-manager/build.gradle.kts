@@ -51,6 +51,7 @@ dependencies {
   testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
   testImplementation("org.mockito.kotlin:mockito-kotlin:5.3.1")
   testImplementation("io.fabric8:kubernetes-server-mock:7.1.0")
+  testImplementation("io.fabric8:mockwebserver:7.1.0")
   testImplementation("com.h2database:h2")
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
