@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { WorkbenchResponse } from '../types/api';
+import { useWorkbenchReadiness } from '../hooks/useWorkbenchReadiness';
 import { StatusBadge } from './StatusBadge';
 import { Button } from './Button';
 import { Modal } from './Modal';
@@ -18,6 +19,18 @@ export function WorkbenchCard({ workbench, onSuspend, onResume, onDelete, onOpen
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
+  const isRunning = workbench.status === 'RUNNING';
+  const isSuspended = workbench.status === 'SUSPENDED';
+  const isPending = workbench.status === 'PENDING';
+
+  // Poll readiness only when the workbench is running
+  const { ready, checking } = useWorkbenchReadiness(workbench.instanceName, isRunning);
+
+  const canSuspend = isRunning;
+  const canResume = isSuspended;
+  const canDelete = !isPending;
+  const canOpen = isRunning && ready;
+
   const handleAction = async (action: string, handler: () => Promise<void>) => {
     setLoading(action);
     try {
@@ -31,13 +44,6 @@ export function WorkbenchCard({ workbench, onSuspend, onResume, onDelete, onOpen
     return new Date(dateString).toLocaleString();
   };
 
-  const isRunning = workbench.status === 'RUNNING';
-  const isSuspended = workbench.status === 'SUSPENDED';
-  const isPending = workbench.status === 'PENDING';
-  const canSuspend = isRunning;
-  const canResume = isSuspended;
-  const canDelete = !isPending;
-  const canOpen = isRunning;
 
   return (
     <>
@@ -143,16 +149,17 @@ export function WorkbenchCard({ workbench, onSuspend, onResume, onDelete, onOpen
 
         {/* Actions */}
         <div className="flex flex-wrap gap-2">
-          {canOpen && (
+          {isRunning && (
             <Button
               size="sm"
               onClick={() => onOpen(workbench)}
-              disabled={loading !== null}
+              disabled={!canOpen || loading !== null}
+              loading={checking}
             >
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
-              Open
+              {checking ? 'Starting…' : 'Open'}
             </Button>
           )}
 

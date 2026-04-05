@@ -112,6 +112,22 @@ export const workbenchApi = {
     });
     return handleResponse<WorkbenchResponse>(response);
   },
+
+  /**
+   * Check if the workbench UI is ready by probing its index.html
+   * Returns true if the response is 200, false otherwise.
+   */
+  async checkReady(instanceName: string): Promise<boolean> {
+    try {
+      const response = await fetch(
+        `${API_BASE}/${encodeURIComponent(instanceName)}/open/index.html`,
+        { method: 'GET', redirect: 'manual' },
+      );
+      return response.status === 200;
+    } catch {
+      return false;
+    }
+  },
 };
 
 export { ApiError };
