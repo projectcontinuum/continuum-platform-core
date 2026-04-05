@@ -17,6 +17,7 @@ interface WorkbenchCardProps {
 export function WorkbenchCard({ workbench, onSuspend, onResume, onDelete, onOpen }: WorkbenchCardProps) {
   const [loading, setLoading] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [expanded, setExpanded] = useState(false);
 
   const isRunning = workbench.status === 'RUNNING';
@@ -212,7 +213,7 @@ export function WorkbenchCard({ workbench, onSuspend, onResume, onDelete, onOpen
       {/* Delete Confirmation Modal */}
       <Modal
         isOpen={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
+        onClose={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}
         title="Delete Workbench"
         size="sm"
       >
@@ -221,16 +222,31 @@ export function WorkbenchCard({ workbench, onSuspend, onResume, onDelete, onOpen
             Are you sure you want to delete <span className="font-semibold text-fg">{workbench.instanceName}</span>?
             This action cannot be undone and all data will be permanently lost.
           </p>
+          <div>
+            <label className="block text-sm text-fg-muted mb-1.5">
+              Type <span className="font-semibold text-fg">{workbench.instanceName}</span> to confirm
+            </label>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder={workbench.instanceName}
+              className="w-full rounded-lg border border-divider bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted/40 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+              autoFocus
+            />
+          </div>
           <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setShowDeleteConfirm(false)}>
+            <Button variant="secondary" onClick={() => { setShowDeleteConfirm(false); setDeleteConfirmText(''); }}>
               Cancel
             </Button>
             <Button
               variant="danger"
               loading={loading === 'delete'}
+              disabled={deleteConfirmText !== workbench.instanceName}
               onClick={async () => {
                 await handleAction('delete', () => onDelete(workbench.instanceName));
                 setShowDeleteConfirm(false);
+                setDeleteConfirmText('');
               }}
             >
               Delete
