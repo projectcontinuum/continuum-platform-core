@@ -1,4 +1,4 @@
-package org.projectcontinuum.core.cluster.manager.config
+package org.projectcontinuum.core.cloud.gateway.config
 
 import org.springframework.context.annotation.Configuration
 
@@ -12,4 +12,3 @@ import org.springframework.context.annotation.Configuration
 // in the future (e.g., for routing to other known backend services).
 @Configuration
 class GatewayConfig
-

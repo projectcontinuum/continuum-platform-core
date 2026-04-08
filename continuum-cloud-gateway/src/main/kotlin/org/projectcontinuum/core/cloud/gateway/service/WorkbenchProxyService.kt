@@ -1,9 +1,9 @@
-package org.projectcontinuum.core.cluster.manager.service
+package org.projectcontinuum.core.cloud.gateway.service
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import org.projectcontinuum.core.cluster.manager.exception.WorkbenchNotFoundException
-import org.projectcontinuum.core.cluster.manager.repository.WorkbenchInstanceRepository
+import org.projectcontinuum.core.cloud.gateway.exception.WorkbenchNotFoundException
+import org.projectcontinuum.core.cloud.gateway.repository.WorkbenchInstanceRepository
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.stereotype.Service
@@ -15,7 +15,7 @@ import java.net.http.HttpResponse
 import java.time.Duration
 
 /**
- * Service responsible for proxying HTTP and WebSocket requests to workbench instances.
+ * Service responsible for proxying HTTP requests to workbench instances.
  *
  * Resolves the target workbench service endpoint from the database and forwards
  * the request, stripping the /api/v1/workbench/{instanceName}/open prefix.
@@ -156,5 +156,3 @@ class WorkbenchProxyService(
     }
   }
 }
-
-

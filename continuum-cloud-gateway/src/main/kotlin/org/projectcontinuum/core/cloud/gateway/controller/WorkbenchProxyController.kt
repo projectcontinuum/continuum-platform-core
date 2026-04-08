@@ -1,8 +1,8 @@
-package org.projectcontinuum.core.cluster.manager.controller
+package org.projectcontinuum.core.cloud.gateway.controller
 
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
-import org.projectcontinuum.core.cluster.manager.service.WorkbenchProxyService
+import org.projectcontinuum.core.cloud.gateway.service.WorkbenchProxyService
 import org.slf4j.LoggerFactory
 import org.springframework.web.bind.annotation.*
 
@@ -35,5 +35,3 @@ class WorkbenchProxyController(
     workbenchProxyService.proxyRequest(instanceName, userId, request, response)
   }
 }
-
-

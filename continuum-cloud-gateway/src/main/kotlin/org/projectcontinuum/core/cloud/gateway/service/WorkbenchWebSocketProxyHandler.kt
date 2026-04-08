@@ -1,6 +1,6 @@
-package org.projectcontinuum.core.cluster.manager.service
+package org.projectcontinuum.core.cloud.gateway.service
 
-import org.projectcontinuum.core.cluster.manager.repository.WorkbenchInstanceRepository
+import org.projectcontinuum.core.cloud.gateway.repository.WorkbenchInstanceRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.web.socket.BinaryMessage
