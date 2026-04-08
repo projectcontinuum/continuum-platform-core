@@ -38,6 +38,10 @@ spring.cloud.gateway.mvc:
       uri: ${CONTINUUM_CLUSTER_MANAGER_URL:http://localhost:8082}
       predicates:
         - Path=/api/v1/workbench/**
+    - id: cluster-manager-ui
+      uri: ${CONTINUUM_CLUSTER_MANAGER_URL:http://localhost:8082}
+      predicates:
+        - Path=/ui/**
 
 logging:
   level:
