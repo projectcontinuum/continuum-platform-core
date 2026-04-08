@@ -17,6 +17,27 @@ spring:
 # Spring Cloud Gateway Server MVC configuration
 spring.cloud.gateway.mvc:
   enabled: true
+  routes:
+    - id: api-server-workflow
+      uri: ${CONTINUUM_API_SERVER_URL:http://localhost:8081}
+      predicates:
+        - Path=/api/v1/workflow/**
+    - id: api-server-workflow-runs
+      uri: ${CONTINUUM_API_SERVER_URL:http://localhost:8081}
+      predicates:
+        - Path=/api/v1/workflow-runs/**
+    - id: api-server-node-explorer
+      uri: ${CONTINUUM_API_SERVER_URL:http://localhost:8081}
+      predicates:
+        - Path=/api/v1/node-explorer/**
+    - id: api-server-data
+      uri: ${CONTINUUM_API_SERVER_URL:http://localhost:8081}
+      predicates:
+        - Path=/api/v1/data/**
+    - id: cluster-manager-workbench
+      uri: ${CONTINUUM_CLUSTER_MANAGER_URL:http://localhost:8082}
+      predicates:
+        - Path=/api/v1/workbench/**
 
 logging:
   level:

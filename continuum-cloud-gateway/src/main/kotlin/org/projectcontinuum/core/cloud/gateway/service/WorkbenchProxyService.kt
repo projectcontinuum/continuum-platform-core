@@ -18,7 +18,7 @@ import java.time.Duration
  * Service responsible for proxying HTTP requests to workbench instances.
  *
  * Resolves the target workbench service endpoint from the database and forwards
- * the request, stripping the /api/v1/workbench/{instanceName}/open prefix.
+ * the request, stripping the /workbench/{instanceName}/open prefix.
  */
 @Service
 class WorkbenchProxyService(
@@ -67,8 +67,8 @@ class WorkbenchProxyService(
     val serviceEndpoint = "wb-${entity.instanceId}-svc.${entity.namespace}.svc.cluster.local:8080"
     val targetBaseUrl = "http://$serviceEndpoint"
 
-    // Strip /api/v1/workbench/{instanceName}/open from the request path
-    val prefixPath = "/api/v1/workbench/$instanceName/open"
+    // Strip /workbench/{instanceName}/open from the request path
+    val prefixPath = "/workbench/$instanceName/open"
     val requestUri = request.requestURI
     val remainingPath = if (requestUri.startsWith(prefixPath)) {
       requestUri.removePrefix(prefixPath)

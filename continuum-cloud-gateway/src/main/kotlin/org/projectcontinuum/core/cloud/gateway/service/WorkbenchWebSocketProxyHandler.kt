@@ -14,7 +14,7 @@ import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 
 // WebSocket proxy handler that forwards WebSocket connections from
-// /api/v1/workbench/{instanceName}/open to the target workbench instance.
+// /workbench/{instanceName}/open to the target workbench instance.
 //
 // For each incoming WebSocket connection, this handler:
 // 1. Extracts the instanceName from the URI path
@@ -39,14 +39,14 @@ class WorkbenchWebSocketProxyHandler(
       return
     }
 
-    // Extract instanceName from the path: /api/v1/workbench/{instanceName}/open/...
+    // Extract instanceName from the path: /workbench/{instanceName}/open/...
     val pathParts = uri.path.split("/")
-    // Expected: ["", "api", "v1", "workbench", "{instanceName}", "open", ...]
-    if (pathParts.size < 6 || pathParts[4].isBlank()) {
+    // Expected: ["", "workbench", "{instanceName}", "open", ...]
+    if (pathParts.size < 4 || pathParts[2].isBlank()) {
       session.close(CloseStatus.BAD_DATA.withReason("Invalid path: cannot extract instanceName"))
       return
     }
-    val instanceName = pathParts[4]
+    val instanceName = pathParts[2]
 
     // Extract userId from handshake headers
     val userId = session.handshakeHeaders.getFirst("x-continuum-user-id") ?: "anonymous"
@@ -67,7 +67,7 @@ class WorkbenchWebSocketProxyHandler(
 
     // Build target WebSocket URL
     val serviceEndpoint = "wb-${entity.instanceId}-svc.${entity.namespace}.svc.cluster.local:8080"
-    val prefixPath = "/api/v1/workbench/$instanceName/open"
+    val prefixPath = "/workbench/$instanceName/open"
     val remainingPath = uri.path.removePrefix(prefixPath).let {
       if (it.isEmpty() || !it.startsWith("/")) "/$it" else it
     }

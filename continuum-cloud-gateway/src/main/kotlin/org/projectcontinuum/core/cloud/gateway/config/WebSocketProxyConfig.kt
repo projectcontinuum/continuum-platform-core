@@ -14,7 +14,7 @@ class WebSocketProxyConfig(
 
   override fun registerWebSocketHandlers(registry: WebSocketHandlerRegistry) {
     registry
-      .addHandler(webSocketProxyHandler, "/api/v1/workbench/*/open/**")
+      .addHandler(webSocketProxyHandler, "/workbench/*/open/**")
       .setAllowedOrigins("*")
   }
 }
