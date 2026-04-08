@@ -120,7 +120,7 @@ export const workbenchApi = {
   async checkReady(instanceName: string): Promise<boolean> {
     try {
       const response = await fetch(
-        `${API_BASE}/${encodeURIComponent(instanceName)}/open/index.html`,
+        `/workbench/${encodeURIComponent(instanceName)}/open/index.html`,
         { method: 'GET', redirect: 'manual' },
       );
       return response.status === 200;
