@@ -24,12 +24,14 @@ spring.cloud.gateway.mvc:
         - Path=/api-server/**
       filters:
         - StripPrefix=1
+        - AddRequestHeader=X-Forwarded-Prefix, /api-server
     - id: cluster-manager
       uri: ${CONTINUUM_CLUSTER_MANAGER_URL:http://localhost:8082}
       predicates:
         - Path=/cluster-manager/**
       filters:
         - StripPrefix=1
+        - AddRequestHeader=X-Forwarded-Prefix, /cluster-manager
 
 logging:
   level:

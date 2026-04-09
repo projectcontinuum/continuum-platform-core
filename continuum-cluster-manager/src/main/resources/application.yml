@@ -1,6 +1,7 @@
 spring.application.name: continuum-cluster-manager
 server:
   port: 8080
+  forward-headers-strategy: framework
   error:
     include-message: always
     include-stacktrace: on_param
