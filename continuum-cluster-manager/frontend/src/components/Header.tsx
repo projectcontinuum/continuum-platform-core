@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '../hooks/useTheme';
+import { assetPath } from '../basePath';
 
 const NAV_LINKS: Array<{ label: string; href: string; external?: boolean }> = [
   { label: 'Workbenches', href: '/' },
@@ -16,7 +17,7 @@ export function Header() {
         className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8"
       >
         <a href="/" className="flex items-center gap-2 text-gradient text-xl font-bold">
-          <img src="/Logo.png" alt="Continuum logo" className="h-8 w-8" />
+          <img src={assetPath('Logo.png')} alt="Continuum logo" className="h-8 w-8" />
           Continuum
         </a>
 

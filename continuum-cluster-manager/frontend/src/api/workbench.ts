@@ -3,8 +3,9 @@ import type {
   WorkbenchUpdateRequest,
   WorkbenchResponse,
 } from '../types/api';
+import { SERVICE_BASE } from '../basePath';
 
-const API_BASE = '/api/v1/workbench';
+const API_BASE = `${SERVICE_BASE}/api/v1/workbench`;
 
 const getHeaders = (): HeadersInit => ({
   'Content-Type': 'application/json',

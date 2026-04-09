@@ -26,3 +26,6 @@ continuum.core:
 
 springdoc:
   packages-to-scan: org.projectcontinuum.core.cluster.manager.controller
+  swagger-ui:
+    config-url: ../v3/api-docs/swagger-config
+    url: ../v3/api-docs

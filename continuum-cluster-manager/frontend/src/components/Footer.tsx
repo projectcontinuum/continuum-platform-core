@@ -1,10 +1,12 @@
+import { assetPath } from '../basePath';
+
 export function Footer() {
   return (
     <footer className="border-t border-divider bg-base" role="contentinfo">
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
           <div className="flex items-center gap-2">
-            <img src="/Logo.png" alt="Continuum logo" className="h-6 w-6" />
+            <img src={assetPath('Logo.png')} alt="Continuum logo" className="h-6 w-6" />
             <span className="text-gradient font-semibold">Continuum Workbench Manager</span>
           </div>
 
