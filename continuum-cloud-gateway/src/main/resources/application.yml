@@ -18,22 +18,12 @@ spring:
 spring.cloud.gateway.mvc:
   enabled: true
   routes:
-    - id: api-server-workflow
-      uri: ${CONTINUUM_API_SERVER_URL:http://localhost:8080}
+    - id: api-server
+      uri: ${CONTINUUM_API_SERVER_URL:http://localhost:8081}
       predicates:
-        - Path=/api/v1/workflow/**
-    - id: api-server-workflow-runs
-      uri: ${CONTINUUM_API_SERVER_URL:http://localhost:8080}
-      predicates:
-        - Path=/api/v1/workflow-runs/**
-    - id: api-server-node-explorer
-      uri: ${CONTINUUM_API_SERVER_URL:http://localhost:8080}
-      predicates:
-        - Path=/api/v1/node-explorer/**
-    - id: api-server-data
-      uri: ${CONTINUUM_API_SERVER_URL:http://localhost:8080}
-      predicates:
-        - Path=/api/v1/data/**
+        - Path=/api-server/**
+      filters:
+        - StripPrefix=1
     - id: cluster-manager
       uri: ${CONTINUUM_CLUSTER_MANAGER_URL:http://localhost:8082}
       predicates:
