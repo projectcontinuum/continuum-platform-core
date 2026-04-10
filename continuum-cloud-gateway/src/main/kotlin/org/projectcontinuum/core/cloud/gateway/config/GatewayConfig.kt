@@ -1,7 +1,6 @@
 package org.projectcontinuum.core.cloud.gateway.config
 
 import org.springframework.beans.factory.annotation.Value
-import org.springframework.cloud.gateway.server.mvc.filter.BeforeFilterFunctions.addRequestHeader
 import org.springframework.cloud.gateway.server.mvc.filter.BeforeFilterFunctions.stripPrefix
 import org.springframework.cloud.gateway.server.mvc.handler.GatewayRouterFunctions.route
 import org.springframework.cloud.gateway.server.mvc.handler.HandlerFunctions.http
@@ -30,7 +29,6 @@ class GatewayConfig(
     route("api-server")
       .route(path("/api-server/**"), http(apiServerUrl))
       .before(stripPrefix(1))
-      .before(addRequestHeader("X-Forwarded-Prefix", "/api-server"))
       .build()
 
   @Bean
@@ -38,7 +36,6 @@ class GatewayConfig(
     route("cluster-manager")
       .route(path("/cluster-manager/**"), http(clusterManagerUrl))
       .before(stripPrefix(1))
-      .before(addRequestHeader("X-Forwarded-Prefix", "/cluster-manager"))
       .build()
 
   private fun path(pattern: String) =

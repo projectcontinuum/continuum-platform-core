@@ -1,6 +1,4 @@
 spring.application.name: continuum-api-server
-server:
-  forward-headers-strategy: framework
 spring:
   datasource:
     url: ${CONTINUUM_DB_URL:jdbc:postgresql://localhost:35432/continuum}
