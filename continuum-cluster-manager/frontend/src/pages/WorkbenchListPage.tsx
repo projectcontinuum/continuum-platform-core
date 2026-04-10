@@ -79,7 +79,7 @@ export function WorkbenchListPage() {
   const handleOpen = (workbench: WorkbenchResponse) => {
     if (workbench.serviceEndpoint) {
       // Open workbench in a new tab via the cluster-manager reverse proxy
-      const externalUrl = `/workbench/${workbench.instanceName}/open/`;
+      const externalUrl = `/workbench/${workbench.instanceName}/open/#/workspace`;
       window.open(externalUrl, '_blank');
     }
   };
