@@ -19,7 +19,7 @@ data class CredentialEntity(
   @Column("type")
   val type: String,
   @Column("data")
-  val data: String,
+  val data: JsonValue,
   @Column("description")
   val description: String? = null,
   @Column("created_by")

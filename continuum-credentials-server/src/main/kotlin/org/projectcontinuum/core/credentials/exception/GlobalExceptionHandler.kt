@@ -20,6 +20,12 @@ class GlobalExceptionHandler {
       .body(mapOf("error" to (ex.message ?: "Not found")))
   }
 
+  @ExceptionHandler(CredentialTypeNotFoundException::class)
+  fun handleTypeNotFound(ex: CredentialTypeNotFoundException): ResponseEntity<Map<String, String>> {
+    return ResponseEntity.status(HttpStatus.NOT_FOUND)
+      .body(mapOf("error" to (ex.message ?: "Credential type not found")))
+  }
+
   @ExceptionHandler(CredentialAlreadyExistsException::class)
   fun handleConflict(ex: CredentialAlreadyExistsException): ResponseEntity<Map<String, String>> {
     return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -57,7 +63,7 @@ class GlobalExceptionHandler {
   @ExceptionHandler(OptimisticLockingFailureException::class)
   fun handleOptimisticLock(ex: OptimisticLockingFailureException): ResponseEntity<Map<String, String>> {
     return ResponseEntity.status(HttpStatus.CONFLICT)
-      .body(mapOf("error" to "Credential was modified concurrently, please retry"))
+      .body(mapOf("error" to "Resource was modified concurrently, please retry"))
   }
 
   @ExceptionHandler(Exception::class)

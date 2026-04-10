@@ -4,7 +4,8 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.projectcontinuum.core.credentials.entity.CredentialEntity
-import org.projectcontinuum.core.credentials.model.CredentialType
+import org.projectcontinuum.core.credentials.entity.CredentialTypeEntity
+import org.projectcontinuum.core.credentials.entity.JsonValue
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import java.time.Instant
@@ -17,17 +18,26 @@ class PostgresCredentialRepositoryTest {
   private lateinit var credentialRepository: CredentialRepository
 
   @Autowired
-  private lateinit var springDataRepository: SpringDataCredentialRepository
+  private lateinit var credentialTypeRepository: CredentialTypeRepository
+
+  @Autowired
+  private lateinit var springDataCredentialRepository: SpringDataCredentialRepository
+
+  @Autowired
+  private lateinit var springDataCredentialTypeRepository: SpringDataCredentialTypeRepository
 
   @BeforeEach
   fun setUp() {
-    springDataRepository.deleteAll()
+    springDataCredentialRepository.deleteAll()
+    springDataCredentialTypeRepository.deleteAll()
+    credentialTypeRepository.save(CredentialTypeEntity(type = "s3"))
+    credentialTypeRepository.save(CredentialTypeEntity(type = "git"))
   }
 
   private fun createEntity(
     userId: String = "user-1",
     name: String = "test-cred",
-    type: String = CredentialType.S3.name
+    type: String = "s3"
   ): CredentialEntity {
     val now = Instant.now()
     return CredentialEntity(
@@ -35,7 +45,7 @@ class PostgresCredentialRepositoryTest {
       userId = userId,
       name = name,
       type = type,
-      data = "encrypted-data",
+      data = JsonValue("""{"accessKey":"enc-key","secretKey":"enc-secret"}"""),
       description = "Test credential",
       createdBy = userId,
       updatedBy = userId,
@@ -54,6 +64,19 @@ class PostgresCredentialRepositoryTest {
     assertNotNull(found)
     assertEquals("test-cred", found!!.name)
     assertEquals("user-1", found.userId)
+    assertEquals("s3", found.type)
+  }
+
+  @Test
+  fun `saved data is preserved as JSON string in JsonValue`() {
+    val entity = createEntity()
+    credentialRepository.save(entity)
+
+    val found = credentialRepository.findByUserIdAndName("user-1", "test-cred")
+
+    assertNotNull(found)
+    assertTrue(found!!.data.value.contains("accessKey"))
+    assertTrue(found.data.value.contains("enc-key"))
   }
 
   @Test
@@ -76,10 +99,10 @@ class PostgresCredentialRepositoryTest {
 
   @Test
   fun `findAllByUserIdAndType filters by type`() {
-    credentialRepository.save(createEntity(name = "s3-cred", type = CredentialType.S3.name))
-    credentialRepository.save(createEntity(name = "git-cred", type = CredentialType.GIT.name))
+    credentialRepository.save(createEntity(name = "s3-cred", type = "s3"))
+    credentialRepository.save(createEntity(name = "git-cred", type = "git"))
 
-    val results = credentialRepository.findAllByUserIdAndType("user-1", CredentialType.S3.name)
+    val results = credentialRepository.findAllByUserIdAndType("user-1", "s3")
 
     assertEquals(1, results.size)
     assertEquals("s3-cred", results[0].name)
@@ -88,7 +111,6 @@ class PostgresCredentialRepositoryTest {
   @Test
   fun `existsByUserIdAndName returns true when exists`() {
     credentialRepository.save(createEntity())
-
     assertTrue(credentialRepository.existsByUserIdAndName("user-1", "test-cred"))
   }
 
@@ -100,9 +122,7 @@ class PostgresCredentialRepositoryTest {
   @Test
   fun `deleteByUserIdAndName removes the credential`() {
     credentialRepository.save(createEntity())
-
     credentialRepository.deleteByUserIdAndName("user-1", "test-cred")
-
     assertNull(credentialRepository.findByUserIdAndName("user-1", "test-cred"))
   }
 
@@ -123,7 +143,6 @@ class PostgresCredentialRepositoryTest {
   @Test
   fun `save updates existing entity`() {
     val entity = credentialRepository.save(createEntity())
-
     val updated = entity.copy(description = "Updated description", updatedAt = Instant.now())
     credentialRepository.save(updated)
 

@@ -5,8 +5,8 @@ import java.time.Instant
 data class CredentialResponse(
   val userId: String,
   val name: String,
-  val type: CredentialType,
-  val data: String,
+  val type: String,
+  val data: Map<String, String>,
   val description: String?,
   val createdBy: String,
   val updatedBy: String,

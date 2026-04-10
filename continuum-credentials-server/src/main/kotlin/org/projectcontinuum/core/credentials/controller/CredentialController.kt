@@ -3,7 +3,6 @@ package org.projectcontinuum.core.credentials.controller
 import jakarta.validation.Valid
 import org.projectcontinuum.core.credentials.model.CredentialCreateRequest
 import org.projectcontinuum.core.credentials.model.CredentialResponse
-import org.projectcontinuum.core.credentials.model.CredentialType
 import org.projectcontinuum.core.credentials.model.CredentialUpdateRequest
 import org.projectcontinuum.core.credentials.service.CredentialService
 import org.springframework.http.HttpStatus
@@ -45,7 +44,7 @@ class CredentialController(
   @GetMapping("/type/{type}")
   fun getCredentialsByType(
     @RequestHeader("x-continuum-user-id", required = false, defaultValue = "anonymous") userId: String,
-    @PathVariable type: CredentialType
+    @PathVariable type: String
   ): ResponseEntity<List<CredentialResponse>> {
     val response = credentialService.getCredentialsByType(userId, type)
     return ResponseEntity.ok(response)

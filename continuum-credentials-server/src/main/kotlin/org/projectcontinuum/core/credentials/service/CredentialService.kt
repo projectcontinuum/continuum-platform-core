@@ -1,13 +1,17 @@
 package org.projectcontinuum.core.credentials.service
 
+import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.ObjectMapper
 import org.projectcontinuum.core.credentials.entity.CredentialEntity
+import org.projectcontinuum.core.credentials.entity.JsonValue
 import org.projectcontinuum.core.credentials.exception.CredentialAlreadyExistsException
 import org.projectcontinuum.core.credentials.exception.CredentialNotFoundException
+import org.projectcontinuum.core.credentials.exception.CredentialTypeNotFoundException
 import org.projectcontinuum.core.credentials.model.CredentialCreateRequest
 import org.projectcontinuum.core.credentials.model.CredentialResponse
-import org.projectcontinuum.core.credentials.model.CredentialType
 import org.projectcontinuum.core.credentials.model.CredentialUpdateRequest
 import org.projectcontinuum.core.credentials.repository.CredentialRepository
+import org.projectcontinuum.core.credentials.repository.CredentialTypeRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
@@ -16,12 +20,17 @@ import java.util.UUID
 @Service
 class CredentialService(
   private val credentialRepository: CredentialRepository,
-  private val encryptionService: EncryptionService
+  private val credentialTypeRepository: CredentialTypeRepository,
+  private val encryptionService: EncryptionService,
+  private val objectMapper: ObjectMapper
 ) {
 
   private val logger = LoggerFactory.getLogger(CredentialService::class.java)
+  private val mapTypeRef = object : TypeReference<Map<String, String>>() {}
 
   fun createCredential(userId: String, request: CredentialCreateRequest): CredentialResponse {
+    validateType(request.type)
+
     if (credentialRepository.existsByUserIdAndName(userId, request.name)) {
       throw CredentialAlreadyExistsException(
         "Credential '${request.name}' already exists for user '$userId'"
@@ -33,8 +42,8 @@ class CredentialService(
       credentialId = UUID.randomUUID(),
       userId = userId,
       name = request.name,
-      type = request.type.name,
-      data = encryptionService.encrypt(request.data),
+      type = request.type,
+      data = encryptMap(request.data),
       description = request.description,
       createdBy = userId,
       updatedBy = userId,
@@ -65,8 +74,8 @@ class CredentialService(
     return toResponse(updated)
   }
 
-  fun getCredentialsByType(userId: String, type: CredentialType): List<CredentialResponse> {
-    val entities = credentialRepository.findAllByUserIdAndType(userId, type.name)
+  fun getCredentialsByType(userId: String, type: String): List<CredentialResponse> {
+    val entities = credentialRepository.findAllByUserIdAndType(userId, type)
     return entities.map { entity ->
       val updated = entity.copy(lastAccessedAt = Instant.now())
       credentialRepository.save(updated)
@@ -78,6 +87,10 @@ class CredentialService(
     val entity = credentialRepository.findByUserIdAndName(userId, name)
       ?: throw CredentialNotFoundException("Credential '$name' not found for user '$userId'")
 
+    if (request.type != null) {
+      validateType(request.type)
+    }
+
     if (request.name != null && request.name != entity.name) {
       if (credentialRepository.existsByUserIdAndName(userId, request.name)) {
         throw CredentialAlreadyExistsException(
@@ -88,8 +101,8 @@ class CredentialService(
 
     val updatedEntity = entity.copy(
       name = request.name ?: entity.name,
-      type = request.type?.name ?: entity.type,
-      data = if (request.data != null) encryptionService.encrypt(request.data) else entity.data,
+      type = request.type ?: entity.type,
+      data = if (request.data != null) encryptMap(request.data) else entity.data,
       description = request.description ?: entity.description,
       updatedBy = userId,
       updatedAt = Instant.now()
@@ -108,12 +121,31 @@ class CredentialService(
     logger.info("Deleted credential '{}' for user '{}'", name, userId)
   }
 
+  private fun validateType(type: String) {
+    if (!credentialTypeRepository.existsByType(type)) {
+      throw CredentialTypeNotFoundException("Credential type '$type' does not exist")
+    }
+  }
+
+  private fun encryptMap(data: Map<String, String>): JsonValue {
+    val encrypted = data.mapValues { (_, value) -> CIPHER_PREFIX + encryptionService.encrypt(value) }
+    return JsonValue(objectMapper.writeValueAsString(encrypted))
+  }
+
+  private fun decryptMap(data: JsonValue): Map<String, String> {
+    val encrypted: Map<String, String> = objectMapper.readValue(data.value, mapTypeRef)
+    return encrypted.mapValues { (_, value) ->
+      val ciphertext = if (value.startsWith(CIPHER_PREFIX)) value.removePrefix(CIPHER_PREFIX) else value
+      encryptionService.decrypt(ciphertext)
+    }
+  }
+
   private fun toResponse(entity: CredentialEntity): CredentialResponse {
     return CredentialResponse(
       userId = entity.userId,
       name = entity.name,
-      type = CredentialType.valueOf(entity.type),
-      data = encryptionService.decrypt(entity.data),
+      type = entity.type,
+      data = decryptMap(entity.data),
       description = entity.description,
       createdBy = entity.createdBy,
       updatedBy = entity.updatedBy,
@@ -121,5 +153,9 @@ class CredentialService(
       updatedAt = entity.updatedAt,
       lastAccessedAt = entity.lastAccessedAt
     )
+  }
+
+  companion object {
+    private const val CIPHER_PREFIX = "{cipher}"
   }
 }

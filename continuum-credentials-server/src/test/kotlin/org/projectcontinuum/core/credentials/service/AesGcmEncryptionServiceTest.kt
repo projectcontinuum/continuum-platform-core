@@ -16,7 +16,7 @@ class AesGcmEncryptionServiceTest {
   @Test
   fun `encrypt and decrypt round-trip returns original plaintext`() {
     val service = createService()
-    val plaintext = """{"accessKey":"AKIAIOSFODNN7EXAMPLE","secretKey":"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"}"""
+    val plaintext = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
 
     val encrypted = service.encrypt(plaintext)
     val decrypted = service.decrypt(encrypted)
@@ -88,7 +88,7 @@ class AesGcmEncryptionServiceTest {
   @Test
   fun `encrypts and decrypts unicode content`() {
     val service = createService()
-    val plaintext = """{"key":"value with émojis 🔑 and 中文"}"""
+    val plaintext = "value with émojis 🔑 and 中文"
 
     val encrypted = service.encrypt(plaintext)
     val decrypted = service.decrypt(encrypted)
