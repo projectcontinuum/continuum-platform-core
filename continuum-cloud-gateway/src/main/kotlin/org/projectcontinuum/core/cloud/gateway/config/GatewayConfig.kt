@@ -12,6 +12,7 @@ import org.springframework.web.servlet.function.RouterFunction
 import org.springframework.web.servlet.function.ServerRequest
 import org.springframework.web.servlet.function.ServerResponse
 import java.net.URI
+import java.util.function.Function
 
 // Spring Cloud Gateway Server MVC configuration.
 //
@@ -32,42 +33,37 @@ class GatewayConfig(
   fun apiServerRoute(): RouterFunction<ServerResponse> =
     route("api-server")
       .route(path("/api-server/**"), http(apiServerUrl))
+      .before(preserveRawQueryString())
       .before(stripPrefix(1))
-      .before(::preserveRawQueryString)
       .build()
 
   @Bean
   fun clusterManagerRoute(): RouterFunction<ServerResponse> =
     route("cluster-manager")
       .route(path("/cluster-manager/**"), http(clusterManagerUrl))
+      .before(preserveRawQueryString())
       .before(stripPrefix(1))
-      .before(::preserveRawQueryString)
       .build()
 
-  // Preserves the raw (percent-encoded) query string from the original request.
-  // Spring Cloud Gateway MVC's URI handling can decode %26 to & in query strings,
-  // which breaks parameters containing literal & characters (e.g., "Aggregation & Grouping").
-  // This filter reconstructs the URI with the raw query string from the servlet request.
-  private fun preserveRawQueryString(request: ServerRequest): ServerRequest {
-    val servletRequest: HttpServletRequest = request.servletRequest()
-    val rawQuery = servletRequest.queryString ?: return request
+  // Before filters run in reverse registration order: stripPrefix runs first, then this.
+  // After stripPrefix modifies the gateway request URI, this filter replaces the query
+  // portion with the raw (percent-encoded) query string from the original servlet request.
+  // This prevents Spring's URI handling from decoding %26 to & in query parameters.
+  private fun preserveRawQueryString(): Function<ServerRequest, ServerRequest> =
+    Function { request ->
+      val rawQuery = request.servletRequest().queryString ?: return@Function request
 
-    val currentUri = request.uri()
-    val correctedUri = URI(
-      currentUri.scheme,
-      currentUri.authority,
-      currentUri.path,
-      null, // clear parsed query to use rawSchemeSpecificPart
-      null
-    ).let {
-      // Rebuild with raw query string to preserve percent-encoding
-      URI("${it.scheme}://${it.authority}${it.path}?${rawQuery}")
+      // Get the URI that stripPrefix set via MvcUtils
+      val gatewayUri = MvcUtils.getRequestUrl(request)
+      if (gatewayUri == null) return@Function request
+
+      // Rebuild the URI with the raw query string to preserve percent-encoding
+      val correctedUri = URI(
+        "${gatewayUri.scheme}://${gatewayUri.authority}${gatewayUri.rawPath}?${rawQuery}"
+      )
+      MvcUtils.setRequestUrl(request, correctedUri)
+      request
     }
-
-    return ServerRequest.from(request)
-      .uri(correctedUri)
-      .build()
-  }
 
   private fun path(pattern: String) =
     org.springframework.cloud.gateway.server.mvc.predicate.GatewayRequestPredicates.path(pattern)
