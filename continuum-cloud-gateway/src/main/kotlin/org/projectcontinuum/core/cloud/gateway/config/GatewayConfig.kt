@@ -1,6 +1,5 @@
 package org.projectcontinuum.core.cloud.gateway.config
 
-import jakarta.servlet.http.HttpServletRequest
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.cloud.gateway.server.mvc.common.MvcUtils
 import org.springframework.cloud.gateway.server.mvc.filter.BeforeFilterFunctions.stripPrefix
@@ -53,14 +52,12 @@ class GatewayConfig(
     Function { request ->
       val rawQuery = request.servletRequest().queryString ?: return@Function request
 
-      // Get the URI that stripPrefix set via MvcUtils
-      val gatewayUri = MvcUtils.getRequestUrl(request)
+      // Get the URI that stripPrefix set via MvcUtils attribute
+      val gatewayUri: URI? = MvcUtils.getAttribute(request, MvcUtils.GATEWAY_REQUEST_URL_ATTR)
       if (gatewayUri == null) return@Function request
 
       // Rebuild the URI with the raw query string to preserve percent-encoding
-      val correctedUri = URI(
-        "${gatewayUri.scheme}://${gatewayUri.authority}${gatewayUri.rawPath}?${rawQuery}"
-      )
+      val correctedUri = URI("${gatewayUri.scheme}://${gatewayUri.authority}${gatewayUri.rawPath}?${rawQuery}")
       MvcUtils.setRequestUrl(request, correctedUri)
       request
     }
