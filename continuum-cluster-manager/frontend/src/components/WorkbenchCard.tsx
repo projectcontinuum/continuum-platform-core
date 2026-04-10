@@ -71,7 +71,7 @@ export function WorkbenchCard({ workbench, onSuspend, onResume, onDelete, onOpen
           <div className="flex items-center justify-between">
             <span className="text-fg-muted">Image:</span>
             <span className="truncate max-w-[200px] text-fg" title={workbench.image}>
-              {workbench.image.split('/').pop()}
+              {workbench.image.includes(':') ? workbench.image.split(':').pop() : workbench.image.split('/').pop()}
             </span>
           </div>
           <div className="flex items-center justify-between">

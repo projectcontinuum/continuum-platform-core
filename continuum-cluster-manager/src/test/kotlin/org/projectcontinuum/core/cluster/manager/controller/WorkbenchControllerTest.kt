@@ -11,6 +11,8 @@ import org.projectcontinuum.core.cluster.manager.exception.WorkbenchNotFoundExce
 import org.projectcontinuum.core.cluster.manager.model.ResourceSpec
 import org.projectcontinuum.core.cluster.manager.model.WorkbenchResponse
 import org.projectcontinuum.core.cluster.manager.model.WorkbenchStatus
+import org.projectcontinuum.core.cluster.manager.service.DockerHubService
+import org.projectcontinuum.core.cluster.manager.service.DockerHubTag
 import org.projectcontinuum.core.cluster.manager.service.WorkbenchService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest
@@ -30,6 +32,9 @@ class WorkbenchControllerTest {
 
   @MockitoBean
   private lateinit var workbenchService: WorkbenchService
+
+  @MockitoBean
+  private lateinit var dockerHubService: DockerHubService
 
   private val objectMapper = jacksonObjectMapper()
 
@@ -496,5 +501,33 @@ class WorkbenchControllerTest {
       .andExpect(status().isOk)
 
     verify(workbenchService).resumeWorkbench("anonymous", "my-workbench")
+  }
+
+  // ── GET /api/v1/workbench/tags ──────────────────────────────────────
+
+  @Test
+  fun `GET tags returns available Docker Hub tags`() {
+    val tags = listOf(
+      DockerHubTag("0.0.5", "2024-01-01T00:00:00Z", 123456L),
+      DockerHubTag("latest", "2024-01-02T00:00:00Z", 654321L)
+    )
+    whenever(dockerHubService.getAvailableTags()).thenReturn(tags)
+
+    mockMvc.perform(get("/api/v1/workbench/tags"))
+      .andExpect(status().isOk)
+      .andExpect(jsonPath("$.length()").value(2))
+      .andExpect(jsonPath("$[0].name").value("0.0.5"))
+      .andExpect(jsonPath("$[0].lastUpdated").value("2024-01-01T00:00:00Z"))
+      .andExpect(jsonPath("$[1].name").value("latest"))
+  }
+
+  @Test
+  fun `GET tags returns 500 when Docker Hub is unreachable`() {
+    whenever(dockerHubService.getAvailableTags())
+      .thenThrow(RuntimeException("Failed to fetch Docker Hub tags"))
+
+    mockMvc.perform(get("/api/v1/workbench/tags"))
+      .andExpect(status().isInternalServerError)
+      .andExpect(jsonPath("$.error").value("Internal server error"))
   }
 }

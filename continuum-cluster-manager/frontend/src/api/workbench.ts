@@ -2,6 +2,7 @@ import type {
   WorkbenchCreateRequest,
   WorkbenchUpdateRequest,
   WorkbenchResponse,
+  DockerHubTag,
 } from '../types/api';
 import { SERVICE_BASE } from '../basePath';
 
@@ -128,6 +129,17 @@ export const workbenchApi = {
     } catch {
       return false;
     }
+  },
+
+  /**
+   * Fetch available Docker Hub image tags for the workbench image
+   */
+  async getAvailableTags(): Promise<DockerHubTag[]> {
+    const response = await fetch(`${API_BASE}/tags`, {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+    return handleResponse<DockerHubTag[]>(response);
   },
 };
 

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
-import { DEFAULT_IMAGE } from '../types/api';
-import type { WorkbenchCreateRequest, ResourceSpec } from '../types/api';
+import { DEFAULT_IMAGE_TAG, WORKBENCH_IMAGE_REPOSITORY } from '../types/api';
+import type { WorkbenchCreateRequest, ResourceSpec, DockerHubTag } from '../types/api';
+import { workbenchApi } from '../api/workbench';
 
 interface CreateWorkbenchModalProps {
   isOpen: boolean;
@@ -135,12 +136,46 @@ function SteppedSlider({ id, label, options, value, onChange, formatValue = form
 // ── Main Component ──────────────────────────────────────────────────
 export function CreateWorkbenchModal({ isOpen, onClose, onCreate }: CreateWorkbenchModalProps) {
   const [instanceName, setInstanceName] = useState('');
-  const [image, setImage] = useState(DEFAULT_IMAGE);
+  const [imageTag, setImageTag] = useState(DEFAULT_IMAGE_TAG);
   const [resources, setResources] = useState<ResourceSpec>(SIZE_PRESETS[0].resources);
   const [selectedPreset, setSelectedPreset] = useState(0);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Tag dropdown state
+  const [availableTags, setAvailableTags] = useState<DockerHubTag[]>([]);
+  const [tagsLoading, setTagsLoading] = useState(false);
+  const [tagsError, setTagsError] = useState(false);
+  const [showTagDropdown, setShowTagDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const filteredTags = availableTags.filter(
+    (tag) => tag.name.toLowerCase().includes(imageTag.toLowerCase())
+  );
+
+  // Fetch tags when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setTagsLoading(true);
+      setTagsError(false);
+      workbenchApi.getAvailableTags()
+        .then((tags) => setAvailableTags(tags))
+        .catch(() => setTagsError(true))
+        .finally(() => setTagsLoading(false));
+    }
+  }, [isOpen]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowTagDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,12 +196,12 @@ export function CreateWorkbenchModal({ isOpen, onClose, onCreate }: CreateWorkbe
     try {
       await onCreate({
         instanceName: instanceName.trim(),
-        image,
+        image: `${WORKBENCH_IMAGE_REPOSITORY}:${imageTag}`,
         resources,
       });
 
       setInstanceName('');
-      setImage(DEFAULT_IMAGE);
+      setImageTag(DEFAULT_IMAGE_TAG);
       setResources(SIZE_PRESETS[0].resources);
       setSelectedPreset(0);
       setShowAdvanced(false);
@@ -219,16 +254,66 @@ export function CreateWorkbenchModal({ isOpen, onClose, onCreate }: CreateWorkbe
 
         {/* Image */}
         <div>
-          <label htmlFor="image" className="block text-sm font-medium text-fg">
+          <label htmlFor="imageTag" className="block text-sm font-medium text-fg">
             Container Image
           </label>
-          <input
-            id="image"
-            type="text"
-            value={image}
-            onChange={(e) => setImage(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-divider bg-base px-3 py-2 text-fg placeholder:text-fg-muted/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-          />
+          <div className="mt-1 relative" ref={dropdownRef}>
+            <div className="flex rounded-lg border border-divider bg-base overflow-hidden focus-within:border-accent focus-within:ring-1 focus-within:ring-accent">
+              <span className="flex items-center bg-surface px-3 text-sm text-fg-muted border-r border-divider select-none whitespace-nowrap">
+                {WORKBENCH_IMAGE_REPOSITORY}:
+              </span>
+              <input
+                id="imageTag"
+                type="text"
+                value={imageTag}
+                onChange={(e) => {
+                  setImageTag(e.target.value);
+                  setShowTagDropdown(true);
+                }}
+                onFocus={() => setShowTagDropdown(true)}
+                placeholder={tagsLoading ? 'Loading...' : DEFAULT_IMAGE_TAG}
+                className="w-[80%] bg-base px-3 py-2 text-fg placeholder:text-fg-muted/50 focus:outline-none"
+                autoComplete="off"
+              />
+              {tagsLoading && (
+                <span className="flex items-center px-2">
+                  <svg className="animate-spin h-4 w-4 text-fg-muted" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                </span>
+              )}
+            </div>
+            {showTagDropdown && filteredTags.length > 0 && (
+              <div className="absolute z-10 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border border-divider bg-base shadow-lg">
+                {filteredTags.map((tag) => (
+                  <button
+                    key={tag.name}
+                    type="button"
+                    onClick={() => {
+                      setImageTag(tag.name);
+                      setShowTagDropdown(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-sm hover:bg-surface transition-colors flex items-center justify-between ${
+                      tag.name === imageTag ? 'bg-accent/10 text-accent' : 'text-fg'
+                    }`}
+                  >
+                    <span className="font-medium">{tag.name}</span>
+                    {tag.lastUpdated && (
+                      <span className="text-xs text-fg-muted ml-2">
+                        {new Date(tag.lastUpdated).toLocaleDateString()}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {tagsError && (
+            <p className="mt-1 text-xs text-fg-muted">
+              Could not load available tags. You can type a tag manually.
+            </p>
+          )}
         </div>
 
         {/* Size Presets */}

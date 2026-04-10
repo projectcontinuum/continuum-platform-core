@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.MissingRequestHeaderException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import org.springframework.web.client.RestClientException
 
 @RestControllerAdvice(basePackages = ["org.projectcontinuum.core.cluster.manager.controller"])
 class GlobalExceptionHandler {
@@ -36,6 +37,13 @@ class GlobalExceptionHandler {
   fun handleMissingHeader(ex: MissingRequestHeaderException): ResponseEntity<Map<String, String>> {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
       .body(mapOf("error" to (ex.message ?: "Missing required header")))
+  }
+
+  @ExceptionHandler(RestClientException::class)
+  fun handleRestClientError(ex: RestClientException): ResponseEntity<Map<String, String>> {
+    logger.error("External API call failed", ex)
+    return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+      .body(mapOf("error" to "Failed to fetch data from external service"))
   }
 
   @ExceptionHandler(Exception::class)

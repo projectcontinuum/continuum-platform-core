@@ -17,3 +17,4 @@ continuum.core:
     workbench:
       default-image: theiaide/theia:latest
       namespace: default
+      image-repository: projectcontinuum/continuum-workbench

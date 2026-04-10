@@ -52,5 +52,13 @@ export const DEFAULT_RESOURCES: ResourceSpec = {
   storageClassName: null,
 };
 
-export const DEFAULT_IMAGE = 'projectcontinuum/continuum-workbench:0.0.5';
+export const WORKBENCH_IMAGE_REPOSITORY = 'projectcontinuum/continuum-workbench';
+export const DEFAULT_IMAGE_TAG = 'latest';
+export const DEFAULT_IMAGE = `${WORKBENCH_IMAGE_REPOSITORY}:${DEFAULT_IMAGE_TAG}`;
+
+export interface DockerHubTag {
+  name: string;
+  lastUpdated: string | null;
+  fullSize: number | null;
+}
 
