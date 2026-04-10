@@ -3,15 +3,18 @@ package org.projectcontinuum.core.credentials.repository
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.projectcontinuum.core.credentials.config.H2JdbcConfig
 import org.projectcontinuum.core.credentials.entity.CredentialEntity
 import org.projectcontinuum.core.credentials.entity.CredentialTypeEntity
 import org.projectcontinuum.core.credentials.entity.JsonValue
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import java.time.Instant
 import java.util.UUID
 
 @SpringBootTest
+@Import(H2JdbcConfig::class)
 class PostgresCredentialRepositoryTest {
 
   @Autowired
@@ -30,8 +33,8 @@ class PostgresCredentialRepositoryTest {
   fun setUp() {
     springDataCredentialRepository.deleteAll()
     springDataCredentialTypeRepository.deleteAll()
-    credentialTypeRepository.save(CredentialTypeEntity(type = "s3"))
-    credentialTypeRepository.save(CredentialTypeEntity(type = "git"))
+    credentialTypeRepository.save(CredentialTypeEntity(credentialTypeId = UUID.randomUUID(), type = "s3"))
+    credentialTypeRepository.save(CredentialTypeEntity(credentialTypeId = UUID.randomUUID(), type = "git"))
   }
 
   private fun createEntity(

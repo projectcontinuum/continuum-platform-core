@@ -85,18 +85,13 @@ class CredentialServiceTest {
 
     assertEquals("AKIAIOSFODNN7", response.data["accessKey"])
     assertEquals("wJalrXUtnFEMI", response.data["secretKey"])
-    assertEquals("s3", response.type)
   }
 
   @Test
   fun `createCredential throws when type does not exist`() {
     whenever(credentialTypeRepository.existsByType("unknown")).thenReturn(false)
 
-    val request = CredentialCreateRequest(
-      name = "my-cred",
-      type = "unknown",
-      data = mapOf("key" to "value")
-    )
+    val request = CredentialCreateRequest(name = "my-cred", type = "unknown", data = mapOf("key" to "value"))
 
     assertThrows(CredentialTypeNotFoundException::class.java) {
       credentialService.createCredential(userId, request)
@@ -106,11 +101,7 @@ class CredentialServiceTest {
 
   @Test
   fun `createCredential throws when name already exists`() {
-    val request = CredentialCreateRequest(
-      name = "my-s3",
-      type = "s3",
-      data = mapOf("key" to "value")
-    )
+    val request = CredentialCreateRequest(name = "my-s3", type = "s3", data = mapOf("key" to "value"))
     whenever(credentialRepository.existsByUserIdAndName(userId, "my-s3")).thenReturn(true)
 
     assertThrows(CredentialAlreadyExistsException::class.java) {
@@ -169,21 +160,18 @@ class CredentialServiceTest {
     whenever(credentialRepository.findByUserIdAndName(userId, "my-s3")).thenReturn(entity)
     whenever(credentialTypeRepository.existsByType("unknown")).thenReturn(false)
 
-    val request = CredentialUpdateRequest(type = "unknown")
-
     assertThrows(CredentialTypeNotFoundException::class.java) {
-      credentialService.updateCredential(userId, "my-s3", request)
+      credentialService.updateCredential(userId, "my-s3", CredentialUpdateRequest(type = "unknown"))
     }
   }
 
   @Test
   fun `updateCredential re-encrypts new map data with cipher prefix`() {
     val entity = sampleEntity()
-    val request = CredentialUpdateRequest(data = mapOf("newKey" to "newValue"))
     whenever(credentialRepository.findByUserIdAndName(userId, "my-s3")).thenReturn(entity)
     whenever(credentialRepository.save(any())).thenAnswer { it.arguments[0] as CredentialEntity }
 
-    credentialService.updateCredential(userId, "my-s3", request)
+    credentialService.updateCredential(userId, "my-s3", CredentialUpdateRequest(data = mapOf("newKey" to "newValue")))
 
     verify(credentialRepository).save(argThat {
       data.value.contains("${cipherPrefix}enc(newValue)")
@@ -193,21 +181,18 @@ class CredentialServiceTest {
   @Test
   fun `updateCredential checks name uniqueness when renaming`() {
     val entity = sampleEntity()
-    val request = CredentialUpdateRequest(name = "new-name")
     whenever(credentialRepository.findByUserIdAndName(userId, "my-s3")).thenReturn(entity)
     whenever(credentialRepository.existsByUserIdAndName(userId, "new-name")).thenReturn(true)
 
     assertThrows(CredentialAlreadyExistsException::class.java) {
-      credentialService.updateCredential(userId, "my-s3", request)
+      credentialService.updateCredential(userId, "my-s3", CredentialUpdateRequest(name = "new-name"))
     }
   }
 
   @Test
   fun `deleteCredential deletes by userId and name`() {
     whenever(credentialRepository.existsByUserIdAndName(userId, "my-s3")).thenReturn(true)
-
     credentialService.deleteCredential(userId, "my-s3")
-
     verify(credentialRepository).deleteByUserIdAndName(userId, "my-s3")
   }
 

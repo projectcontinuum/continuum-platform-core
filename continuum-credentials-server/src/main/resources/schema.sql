@@ -1,10 +1,12 @@
 -- credential_types must be created before credentials (FK dependency)
 CREATE TABLE IF NOT EXISTS credential_types (
-    type             VARCHAR(50)  PRIMARY KEY,
-    "schema"         JSONB        NOT NULL DEFAULT '{}',
-    ui_schema        JSONB        NOT NULL DEFAULT '{}',
-    created_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at       TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    credential_type_id UUID         PRIMARY KEY,
+    type               VARCHAR(50)  NOT NULL UNIQUE,
+    "schema"           JSONB        NOT NULL DEFAULT '{}',
+    ui_schema          JSONB        NOT NULL DEFAULT '{}',
+    created_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    entity_version     BIGINT       NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS credentials (

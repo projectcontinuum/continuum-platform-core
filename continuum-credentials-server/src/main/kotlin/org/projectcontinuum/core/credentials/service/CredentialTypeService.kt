@@ -13,6 +13,7 @@ import org.projectcontinuum.core.credentials.repository.CredentialTypeRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import java.time.Instant
+import java.util.UUID
 
 @Service
 class CredentialTypeService(
@@ -30,12 +31,12 @@ class CredentialTypeService(
 
     val now = Instant.now()
     val entity = CredentialTypeEntity(
+      credentialTypeId = UUID.randomUUID(),
       type = request.type,
       schema = JsonValue(objectMapper.writeValueAsString(request.schema)),
       uiSchema = JsonValue(objectMapper.writeValueAsString(request.uiSchema)),
       createdAt = now,
-      updatedAt = now,
-      isNewEntity = true
+      updatedAt = now
     )
 
     val saved = credentialTypeRepository.save(entity)
@@ -60,8 +61,7 @@ class CredentialTypeService(
     val updatedEntity = entity.copy(
       schema = if (request.schema != null) JsonValue(objectMapper.writeValueAsString(request.schema)) else entity.schema,
       uiSchema = if (request.uiSchema != null) JsonValue(objectMapper.writeValueAsString(request.uiSchema)) else entity.uiSchema,
-      updatedAt = Instant.now(),
-      isNewEntity = false
+      updatedAt = Instant.now()
     )
 
     val saved = credentialTypeRepository.save(updatedEntity)

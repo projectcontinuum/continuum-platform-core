@@ -1,15 +1,17 @@
 package org.projectcontinuum.core.credentials.entity
 
 import org.springframework.data.annotation.Id
-import org.springframework.data.annotation.Transient
-import org.springframework.data.domain.Persistable
+import org.springframework.data.annotation.Version
 import org.springframework.data.relational.core.mapping.Column
 import org.springframework.data.relational.core.mapping.Table
 import java.time.Instant
+import java.util.UUID
 
 @Table("credential_types")
 data class CredentialTypeEntity(
   @Id
+  @Column("credential_type_id")
+  val credentialTypeId: UUID,
   @Column("type")
   val type: String,
   @Column("schema")
@@ -20,9 +22,7 @@ data class CredentialTypeEntity(
   val createdAt: Instant = Instant.now(),
   @Column("updated_at")
   val updatedAt: Instant = Instant.now(),
-  @Transient
-  val isNewEntity: Boolean = true
-) : Persistable<String> {
-  override fun getId(): String = type
-  override fun isNew(): Boolean = isNewEntity
-}
+  @Version
+  @Column("entity_version")
+  val entityVersion: Long? = null
+)

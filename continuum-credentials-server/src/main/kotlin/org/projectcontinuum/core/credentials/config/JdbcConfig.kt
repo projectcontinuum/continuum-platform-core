@@ -12,16 +12,16 @@ import org.springframework.data.jdbc.repository.config.AbstractJdbcConfiguration
 class JdbcConfig : AbstractJdbcConfiguration() {
 
   override fun userConverters(): List<Any> {
-    return listOf(PGobjectToJsonValueConverter(), JsonValueToPGobjectConverter())
+    return listOf(
+      JsonValueToPGobjectConverter(),
+      PGobjectToJsonValueConverter(),
+      StringToJsonValueConverter()
+    )
   }
 
-  @ReadingConverter
-  class PGobjectToJsonValueConverter : Converter<PGobject, JsonValue> {
-    override fun convert(source: PGobject): JsonValue {
-      return JsonValue(source.value ?: "{}")
-    }
-  }
-
+  /**
+   * Writing converter for PostgreSQL: wraps JsonValue as PGobject with type "jsonb".
+   */
   @WritingConverter
   class JsonValueToPGobjectConverter : Converter<JsonValue, PGobject> {
     override fun convert(source: JsonValue): PGobject {
@@ -29,6 +29,26 @@ class JdbcConfig : AbstractJdbcConfiguration() {
       jsonb.type = "jsonb"
       jsonb.value = source.value
       return jsonb
+    }
+  }
+
+  /**
+   * Reading converter for PostgreSQL: JSONB columns are returned as PGobject.
+   */
+  @ReadingConverter
+  class PGobjectToJsonValueConverter : Converter<PGobject, JsonValue> {
+    override fun convert(source: PGobject): JsonValue {
+      return JsonValue(source.value ?: "{}")
+    }
+  }
+
+  /**
+   * Reading converter for H2: TEXT columns are returned as plain String.
+   */
+  @ReadingConverter
+  class StringToJsonValueConverter : Converter<String, JsonValue> {
+    override fun convert(source: String): JsonValue {
+      return JsonValue(source)
     }
   }
 }
