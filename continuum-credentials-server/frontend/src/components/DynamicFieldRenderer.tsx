@@ -1,13 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { JsonForms } from '@jsonforms/react';
-import type { UISchemaElement, JsonSchema } from '@jsonforms/core';
+import type { UISchemaElement, JsonSchema, JsonFormsCore } from '@jsonforms/core';
 import {
   materialRenderers,
   materialCells,
 } from '@jsonforms/material-renderers';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import { useTheme } from '../hooks/useTheme';
 import { KeyValueEditor } from './KeyValueEditor';
 
 interface DynamicFieldRendererProps {
@@ -16,53 +15,80 @@ interface DynamicFieldRendererProps {
   uiSchema: Record<string, unknown>;
   data: Record<string, string>;
   onChange: (data: Record<string, string>) => void;
+  isDark: boolean;
 }
 
 /**
  * Determine if this type/schema combination should fall back to the
  * KeyValueEditor instead of JSON Forms.
- *
- * Falls back when:
- *  - The type is "generic" (case-insensitive)
- *  - The schema uses additionalProperties (map/dictionary pattern)
- *  - The schema has no typed properties JSON Forms can render
  */
 function shouldUseKeyValueEditor(type: string, schema: Record<string, unknown>): boolean {
   if (type.toLowerCase() === 'generic') return true;
-
-  // Top-level additionalProperties → free-form map
   if (schema.additionalProperties) return true;
-
   if (schema.type !== 'object') return true;
 
   const props = schema.properties as Record<string, Record<string, unknown>> | undefined;
   if (!props || Object.keys(props).length === 0) return true;
 
-  // If the only property itself is an object with additionalProperties,
-  // that's a nested map pattern (like the current GENERIC schema)
   const keys = Object.keys(props);
   if (keys.length === 1) {
     const single = props[keys[0]];
     if (single?.type === 'object' && single?.additionalProperties) return true;
   }
 
-  // Check there's at least one simple renderable property
   return !Object.values(props).some((prop) => {
     const t = prop.type;
     return t === 'string' || t === 'number' || t === 'integer' || t === 'boolean';
   });
 }
 
-/**
- * Validate that a uiSchema is in JSON Forms format.
- * JSON Forms expects objects with a "type" key (e.g., "VerticalLayout", "Control").
- */
 function isJsonFormsUiSchema(uiSchema: Record<string, unknown>): boolean {
   return typeof uiSchema.type === 'string' && uiSchema.type !== '';
 }
 
-export function DynamicFieldRenderer({ type, schema, uiSchema, data, onChange }: DynamicFieldRendererProps) {
-  const { isDark } = useTheme();
+const EMPTY_SCHEMA: Record<string, unknown> = {};
+const EMPTY_UI_SCHEMA: Record<string, unknown> = {};
+
+/**
+ * Cleans JSON Forms data: keeps only defined, non-null values as strings.
+ */
+function cleanFormData(raw: Record<string, unknown>): Record<string, string> {
+  const cleaned: Record<string, string> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (value !== undefined && value !== null) {
+      cleaned[key] = String(value);
+    }
+  }
+  return cleaned;
+}
+
+export function DynamicFieldRenderer({
+  type,
+  schema = EMPTY_SCHEMA,
+  uiSchema = EMPTY_UI_SCHEMA,
+  data,
+  onChange,
+  isDark,
+}: DynamicFieldRendererProps) {
+  // JSON Forms manages its own internal data state to avoid
+  // parent re-renders resetting the form / losing cursor position.
+  const [internalData, setInternalData] = useState<Record<string, unknown>>(data);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+
+  // Sync from parent ONLY when the type or schema changes (not on every data update).
+  // This handles: initial load, type dropdown change, edit modal opening with new credential.
+  const schemaKey = JSON.stringify(schema);
+  useEffect(() => {
+    setInternalData(data);
+  }, [type, schemaKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleChange = useCallback((state: Pick<JsonFormsCore, 'data' | 'errors'>) => {
+    if (state.data) {
+      setInternalData(state.data as Record<string, unknown>);
+      onChangeRef.current(cleanFormData(state.data as Record<string, unknown>));
+    }
+  }, []);
 
   const muiTheme = useMemo(() => createTheme({
     palette: {
@@ -97,12 +123,10 @@ export function DynamicFieldRenderer({ type, schema, uiSchema, data, onChange }:
     },
   }), [isDark]);
 
-  // Fall back to KeyValueEditor for generic / map-style schemas
   if (shouldUseKeyValueEditor(type, schema)) {
     return <KeyValueEditor data={data} onChange={onChange} />;
   }
 
-  // Only pass uiSchema to JSON Forms if it's in JSON Forms format
   const validUiSchema = isJsonFormsUiSchema(uiSchema)
     ? (uiSchema as unknown as UISchemaElement)
     : undefined;
@@ -114,18 +138,10 @@ export function DynamicFieldRenderer({ type, schema, uiSchema, data, onChange }:
         <JsonForms
           schema={schema as JsonSchema}
           uischema={validUiSchema}
-          data={data}
+          data={internalData}
           renderers={materialRenderers}
           cells={materialCells}
-          onChange={({ data: newData }) => {
-            if (newData) {
-              const stringData: Record<string, string> = {};
-              for (const [key, value] of Object.entries(newData as Record<string, unknown>)) {
-                stringData[key] = value != null ? String(value) : '';
-              }
-              onChange(stringData);
-            }
-          }}
+          onChange={handleChange}
         />
       </div>
     </ThemeProvider>

@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { DynamicFieldRenderer } from './DynamicFieldRenderer';
+import { useTheme } from '../hooks/useTheme';
 import type { CredentialResponse, CredentialUpdateRequest, CredentialTypeResponse } from '../types/api';
 
 interface EditCredentialModalProps {
@@ -13,6 +14,10 @@ interface EditCredentialModalProps {
   getTypeWithVersion: (typeName: string, version?: string) => CredentialTypeResponse | undefined;
 }
 
+// Stable fallback objects to avoid re-renders
+const EMPTY_SCHEMA: Record<string, unknown> = {};
+const EMPTY_UI_SCHEMA: Record<string, unknown> = {};
+
 export function EditCredentialModal({
   credential,
   isOpen,
@@ -21,25 +26,29 @@ export function EditCredentialModal({
   credentialTypes,
   getTypeWithVersion,
 }: EditCredentialModalProps) {
+  const { isDark } = useTheme();
   const [data, setData] = useState<Record<string, string>>({});
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  // Available versions for the credential's type
-  const versionsForType = credentialTypes
-    .filter(t => t.type === credential?.type)
-    .map(t => t.version)
-    .sort((a, b) => b.localeCompare(a, undefined, { numeric: true }));
   const [selectedVersion, setSelectedVersion] = useState('');
 
-  // Get the type's schema
-  const selectedTypeObj = getTypeWithVersion(
-    credential?.type ?? '',
-    selectedVersion || credential?.typeVersion,
+  // Available versions for the credential's type
+  const versionsForType = useMemo(() =>
+    credentialTypes
+      .filter(t => t.type === credential?.type)
+      .map(t => t.version)
+      .sort((a, b) => b.localeCompare(a, undefined, { numeric: true })),
+    [credentialTypes, credential?.type],
   );
-  const schema = selectedTypeObj?.schema ?? {};
-  const uiSchema = selectedTypeObj?.uiSchema ?? {};
+
+  // Get the type's schema — memoized for stable references
+  const selectedTypeObj = useMemo(
+    () => getTypeWithVersion(credential?.type ?? '', selectedVersion || credential?.typeVersion),
+    [getTypeWithVersion, credential?.type, credential?.typeVersion, selectedVersion],
+  );
+  const schema = selectedTypeObj?.schema ?? EMPTY_SCHEMA;
+  const uiSchema = selectedTypeObj?.uiSchema ?? EMPTY_UI_SCHEMA;
 
   // Populate form when credential changes
   useEffect(() => {
@@ -147,6 +156,7 @@ export function EditCredentialModal({
               uiSchema={uiSchema}
               data={data}
               onChange={setData}
+              isDark={isDark}
             />
           </div>
         </div>
