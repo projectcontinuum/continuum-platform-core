@@ -9,15 +9,21 @@ class PostgresCredentialTypeRepository(
   override fun save(entity: CredentialTypeEntity): CredentialTypeEntity =
     springDataRepository.save(entity)
 
-  override fun findByType(type: String): CredentialTypeEntity? =
-    springDataRepository.findByType(type)
+  override fun findByTypeAndVersion(type: String, version: String): CredentialTypeEntity? =
+    springDataRepository.findByTypeAndVersion(type, version)
+
+  override fun findAllByType(type: String): List<CredentialTypeEntity> =
+    springDataRepository.findAllByType(type)
 
   override fun findAll(): List<CredentialTypeEntity> =
     springDataRepository.findAll().toList()
 
-  override fun deleteByType(type: String) =
-    springDataRepository.deleteByType(type)
+  override fun deleteByTypeAndVersion(type: String, version: String) =
+    springDataRepository.deleteByTypeAndVersion(type, version)
 
   override fun existsByType(type: String): Boolean =
     springDataRepository.existsByType(type)
+
+  override fun existsByTypeAndVersion(type: String, version: String): Boolean =
+    springDataRepository.existsByTypeAndVersion(type, version)
 }

@@ -18,6 +18,8 @@ data class CredentialTypeEntity(
   val schema: JsonValue = JsonValue("{}"),
   @Column("ui_schema")
   val uiSchema: JsonValue = JsonValue("{}"),
+  @Column("credential_type_version")
+  val credentialTypeVersion: String = "1.0.0",
   @Column("created_at")
   val createdAt: Instant = Instant.now(),
   @Column("updated_at")

@@ -15,5 +15,9 @@ data class CredentialTypeCreateRequest(
 
   val schema: Map<String, Any?> = emptyMap(),
 
-  val uiSchema: Map<String, Any?> = emptyMap()
+  val uiSchema: Map<String, Any?> = emptyMap(),
+
+  @field:NotBlank(message = "Version is required")
+  @field:Size(max = 50, message = "Version must be at most 50 characters")
+  val version: String = "1.0.0"
 )

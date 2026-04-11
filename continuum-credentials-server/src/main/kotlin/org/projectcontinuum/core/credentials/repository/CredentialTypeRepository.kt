@@ -6,11 +6,15 @@ interface CredentialTypeRepository {
 
   fun save(entity: CredentialTypeEntity): CredentialTypeEntity
 
-  fun findByType(type: String): CredentialTypeEntity?
+  fun findByTypeAndVersion(type: String, version: String): CredentialTypeEntity?
+
+  fun findAllByType(type: String): List<CredentialTypeEntity>
 
   fun findAll(): List<CredentialTypeEntity>
 
-  fun deleteByType(type: String)
+  fun deleteByTypeAndVersion(type: String, version: String)
 
   fun existsByType(type: String): Boolean
+
+  fun existsByTypeAndVersion(type: String, version: String): Boolean
 }

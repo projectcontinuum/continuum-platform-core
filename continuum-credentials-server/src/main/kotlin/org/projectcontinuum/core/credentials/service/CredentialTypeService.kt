@@ -12,6 +12,8 @@ import org.projectcontinuum.core.credentials.model.CredentialTypeUpdateRequest
 import org.projectcontinuum.core.credentials.repository.CredentialTypeRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.nio.ByteBuffer
+import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
 
@@ -24,57 +26,106 @@ class CredentialTypeService(
   private val logger = LoggerFactory.getLogger(CredentialTypeService::class.java)
   private val mapTypeRef = object : TypeReference<Map<String, Any?>>() {}
 
+  companion object {
+    private val CREDENTIAL_TYPE_NAMESPACE = UUID.fromString("a3f1e8b0-7c2d-4e5f-9a1b-3d6c8f0e2b4a")
+  }
+
   fun createType(request: CredentialTypeCreateRequest): CredentialTypeResponse {
-    if (credentialTypeRepository.existsByType(request.type)) {
-      throw CredentialAlreadyExistsException("Credential type '${request.type}' already exists")
+    if (credentialTypeRepository.existsByTypeAndVersion(request.type, request.version)) {
+      throw CredentialAlreadyExistsException(
+        "Credential type '${request.type}' version '${request.version}' already exists"
+      )
     }
+
+    val normalizedSchema = normalizeJson(request.schema)
+    val normalizedUiSchema = normalizeJson(request.uiSchema)
 
     val now = Instant.now()
     val entity = CredentialTypeEntity(
-      credentialTypeId = UUID.randomUUID(),
+      credentialTypeId = generateTypeId(request.type, normalizedSchema, normalizedUiSchema),
       type = request.type,
-      schema = JsonValue(objectMapper.writeValueAsString(request.schema)),
-      uiSchema = JsonValue(objectMapper.writeValueAsString(request.uiSchema)),
+      schema = JsonValue(normalizedSchema),
+      uiSchema = JsonValue(normalizedUiSchema),
+      credentialTypeVersion = request.version,
       createdAt = now,
       updatedAt = now
     )
 
     val saved = credentialTypeRepository.save(entity)
-    logger.info("Created credential type '{}'", saved.type)
+    logger.info("Created credential type '{}' v{}", saved.type, saved.credentialTypeVersion)
     return toResponse(saved)
   }
 
-  fun getType(type: String): CredentialTypeResponse {
-    val entity = credentialTypeRepository.findByType(type)
-      ?: throw CredentialTypeNotFoundException("Credential type '$type' not found")
+  fun getType(type: String, version: String): CredentialTypeResponse {
+    val entity = credentialTypeRepository.findByTypeAndVersion(type, version)
+      ?: throw CredentialTypeNotFoundException("Credential type '$type' version '$version' not found")
     return toResponse(entity)
+  }
+
+  fun getTypeVersions(type: String): List<CredentialTypeResponse> {
+    val entities = credentialTypeRepository.findAllByType(type)
+    if (entities.isEmpty()) {
+      throw CredentialTypeNotFoundException("Credential type '$type' not found")
+    }
+    return entities.map { toResponse(it) }
   }
 
   fun listTypes(): List<CredentialTypeResponse> {
     return credentialTypeRepository.findAll().map { toResponse(it) }
   }
 
-  fun updateType(type: String, request: CredentialTypeUpdateRequest): CredentialTypeResponse {
-    val entity = credentialTypeRepository.findByType(type)
-      ?: throw CredentialTypeNotFoundException("Credential type '$type' not found")
+  fun updateType(type: String, version: String, request: CredentialTypeUpdateRequest): CredentialTypeResponse {
+    val entity = credentialTypeRepository.findByTypeAndVersion(type, version)
+      ?: throw CredentialTypeNotFoundException("Credential type '$type' version '$version' not found")
 
     val updatedEntity = entity.copy(
-      schema = if (request.schema != null) JsonValue(objectMapper.writeValueAsString(request.schema)) else entity.schema,
-      uiSchema = if (request.uiSchema != null) JsonValue(objectMapper.writeValueAsString(request.uiSchema)) else entity.uiSchema,
+      schema = if (request.schema != null) JsonValue(normalizeJson(request.schema)) else entity.schema,
+      uiSchema = if (request.uiSchema != null) JsonValue(normalizeJson(request.uiSchema)) else entity.uiSchema,
+      credentialTypeVersion = request.version ?: entity.credentialTypeVersion,
       updatedAt = Instant.now()
     )
 
     val saved = credentialTypeRepository.save(updatedEntity)
-    logger.info("Updated credential type '{}'", saved.type)
+    logger.info("Updated credential type '{}' v{}", saved.type, saved.credentialTypeVersion)
     return toResponse(saved)
   }
 
-  fun deleteType(type: String) {
-    if (!credentialTypeRepository.existsByType(type)) {
-      throw CredentialTypeNotFoundException("Credential type '$type' not found")
+  fun deleteType(type: String, version: String) {
+    if (!credentialTypeRepository.existsByTypeAndVersion(type, version)) {
+      throw CredentialTypeNotFoundException("Credential type '$type' version '$version' not found")
     }
-    credentialTypeRepository.deleteByType(type)
-    logger.info("Deleted credential type '{}'", type)
+    credentialTypeRepository.deleteByTypeAndVersion(type, version)
+    logger.info("Deleted credential type '{}' v{}", type, version)
+  }
+
+  private fun normalizeJson(data: Map<String, Any?>): String {
+    val tree = objectMapper.valueToTree<com.fasterxml.jackson.databind.JsonNode>(data)
+    return objectMapper.writeValueAsString(tree)
+  }
+
+  private fun generateTypeId(type: String, schema: String, uiSchema: String): UUID {
+    val name = "$type:$schema:$uiSchema"
+    return uuidV5(CREDENTIAL_TYPE_NAMESPACE, name)
+  }
+
+  private fun uuidV5(namespace: UUID, name: String): UUID {
+    val sha1 = MessageDigest.getInstance("SHA-1")
+    sha1.update(toBytes(namespace))
+    sha1.update(name.toByteArray(Charsets.UTF_8))
+    val hash = sha1.digest()
+
+    hash[6] = (hash[6].toInt() and 0x0F or 0x50).toByte()
+    hash[8] = (hash[8].toInt() and 0x3F or 0x80).toByte()
+
+    val buffer = ByteBuffer.wrap(hash)
+    return UUID(buffer.long, buffer.long)
+  }
+
+  private fun toBytes(uuid: UUID): ByteArray {
+    val buffer = ByteBuffer.allocate(16)
+    buffer.putLong(uuid.mostSignificantBits)
+    buffer.putLong(uuid.leastSignificantBits)
+    return buffer.array()
   }
 
   private fun toResponse(entity: CredentialTypeEntity): CredentialTypeResponse {
@@ -82,6 +133,7 @@ class CredentialTypeService(
       type = entity.type,
       schema = objectMapper.readValue(entity.schema.value, mapTypeRef),
       uiSchema = objectMapper.readValue(entity.uiSchema.value, mapTypeRef),
+      version = entity.credentialTypeVersion,
       createdAt = entity.createdAt,
       updatedAt = entity.updatedAt
     )

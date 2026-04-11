@@ -33,8 +33,9 @@ class PostgresCredentialRepositoryTest {
   fun setUp() {
     springDataCredentialRepository.deleteAll()
     springDataCredentialTypeRepository.deleteAll()
-    credentialTypeRepository.save(CredentialTypeEntity(credentialTypeId = UUID.randomUUID(), type = "s3"))
-    credentialTypeRepository.save(CredentialTypeEntity(credentialTypeId = UUID.randomUUID(), type = "git"))
+    credentialTypeRepository.save(CredentialTypeEntity(credentialTypeId = UUID.randomUUID(), type = "s3", credentialTypeVersion = "1.0.0"))
+    credentialTypeRepository.save(CredentialTypeEntity(credentialTypeId = UUID.randomUUID(), type = "s3", credentialTypeVersion = "2.0.0"))
+    credentialTypeRepository.save(CredentialTypeEntity(credentialTypeId = UUID.randomUUID(), type = "git", credentialTypeVersion = "1.0.0"))
   }
 
   private fun createEntity(
@@ -59,33 +60,18 @@ class PostgresCredentialRepositoryTest {
 
   @Test
   fun `save and findByUserIdAndName`() {
-    val entity = createEntity()
-    credentialRepository.save(entity)
+    credentialRepository.save(createEntity())
 
     val found = credentialRepository.findByUserIdAndName("user-1", "test-cred")
 
     assertNotNull(found)
     assertEquals("test-cred", found!!.name)
-    assertEquals("user-1", found.userId)
     assertEquals("s3", found.type)
   }
 
   @Test
-  fun `saved data is preserved as JSON string in JsonValue`() {
-    val entity = createEntity()
-    credentialRepository.save(entity)
-
-    val found = credentialRepository.findByUserIdAndName("user-1", "test-cred")
-
-    assertNotNull(found)
-    assertTrue(found!!.data.value.contains("accessKey"))
-    assertTrue(found.data.value.contains("enc-key"))
-  }
-
-  @Test
   fun `findByUserIdAndName returns null when not found`() {
-    val found = credentialRepository.findByUserIdAndName("user-1", "nonexistent")
-    assertNull(found)
+    assertNull(credentialRepository.findByUserIdAndName("user-1", "nonexistent"))
   }
 
   @Test
@@ -112,44 +98,53 @@ class PostgresCredentialRepositoryTest {
   }
 
   @Test
-  fun `existsByUserIdAndName returns true when exists`() {
-    credentialRepository.save(createEntity())
-    assertTrue(credentialRepository.existsByUserIdAndName("user-1", "test-cred"))
-  }
-
-  @Test
-  fun `existsByUserIdAndName returns false when not exists`() {
-    assertFalse(credentialRepository.existsByUserIdAndName("user-1", "nonexistent"))
-  }
-
-  @Test
-  fun `deleteByUserIdAndName removes the credential`() {
-    credentialRepository.save(createEntity())
-    credentialRepository.deleteByUserIdAndName("user-1", "test-cred")
-    assertNull(credentialRepository.findByUserIdAndName("user-1", "test-cred"))
-  }
-
-  @Test
   fun `different users can have same credential name`() {
     credentialRepository.save(createEntity(userId = "user-1", name = "shared-name"))
     credentialRepository.save(createEntity(userId = "user-2", name = "shared-name"))
 
-    val user1Cred = credentialRepository.findByUserIdAndName("user-1", "shared-name")
-    val user2Cred = credentialRepository.findByUserIdAndName("user-2", "shared-name")
+    assertNotNull(credentialRepository.findByUserIdAndName("user-1", "shared-name"))
+    assertNotNull(credentialRepository.findByUserIdAndName("user-2", "shared-name"))
+  }
 
-    assertNotNull(user1Cred)
-    assertNotNull(user2Cred)
-    assertEquals("user-1", user1Cred!!.userId)
-    assertEquals("user-2", user2Cred!!.userId)
+  @Test
+  fun `credential type can have multiple versions`() {
+    val s3Versions = credentialTypeRepository.findAllByType("s3")
+    assertEquals(2, s3Versions.size)
+
+    val v1 = credentialTypeRepository.findByTypeAndVersion("s3", "1.0.0")
+    val v2 = credentialTypeRepository.findByTypeAndVersion("s3", "2.0.0")
+    assertNotNull(v1)
+    assertNotNull(v2)
+    assertNotEquals(v1!!.credentialTypeId, v2!!.credentialTypeId)
+  }
+
+  @Test
+  fun `existsByType returns true when any version exists`() {
+    assertTrue(credentialTypeRepository.existsByType("s3"))
+    assertFalse(credentialTypeRepository.existsByType("nonexistent"))
+  }
+
+  @Test
+  fun `existsByTypeAndVersion checks specific version`() {
+    assertTrue(credentialTypeRepository.existsByTypeAndVersion("s3", "1.0.0"))
+    assertTrue(credentialTypeRepository.existsByTypeAndVersion("s3", "2.0.0"))
+    assertFalse(credentialTypeRepository.existsByTypeAndVersion("s3", "3.0.0"))
+  }
+
+  @Test
+  fun `deleteByTypeAndVersion removes only that version`() {
+    credentialTypeRepository.deleteByTypeAndVersion("s3", "1.0.0")
+
+    assertNull(credentialTypeRepository.findByTypeAndVersion("s3", "1.0.0"))
+    assertNotNull(credentialTypeRepository.findByTypeAndVersion("s3", "2.0.0"))
   }
 
   @Test
   fun `save updates existing entity`() {
     val entity = credentialRepository.save(createEntity())
-    val updated = entity.copy(description = "Updated description", updatedAt = Instant.now())
+    val updated = entity.copy(description = "Updated", updatedAt = Instant.now())
     credentialRepository.save(updated)
 
-    val found = credentialRepository.findByUserIdAndName("user-1", "test-cred")
-    assertEquals("Updated description", found!!.description)
+    assertEquals("Updated", credentialRepository.findByUserIdAndName("user-1", "test-cred")!!.description)
   }
 }

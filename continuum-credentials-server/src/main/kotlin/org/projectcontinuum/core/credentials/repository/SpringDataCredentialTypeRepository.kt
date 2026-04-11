@@ -8,13 +8,19 @@ import java.util.UUID
 
 interface SpringDataCredentialTypeRepository : CrudRepository<CredentialTypeEntity, UUID> {
 
-  @Query("SELECT * FROM credential_types WHERE type = :type LIMIT 1")
-  fun findByType(type: String): CredentialTypeEntity?
+  @Query("SELECT * FROM credential_types WHERE type = :type AND credential_type_version = :version LIMIT 1")
+  fun findByTypeAndVersion(type: String, version: String): CredentialTypeEntity?
+
+  @Query("SELECT * FROM credential_types WHERE type = :type ORDER BY created_at DESC")
+  fun findAllByType(type: String): List<CredentialTypeEntity>
 
   @Modifying
-  @Query("DELETE FROM credential_types WHERE type = :type")
-  fun deleteByType(type: String)
+  @Query("DELETE FROM credential_types WHERE type = :type AND credential_type_version = :version")
+  fun deleteByTypeAndVersion(type: String, version: String)
 
   @Query("SELECT COUNT(*) > 0 FROM credential_types WHERE type = :type")
   fun existsByType(type: String): Boolean
+
+  @Query("SELECT COUNT(*) > 0 FROM credential_types WHERE type = :type AND credential_type_version = :version")
+  fun existsByTypeAndVersion(type: String, version: String): Boolean
 }

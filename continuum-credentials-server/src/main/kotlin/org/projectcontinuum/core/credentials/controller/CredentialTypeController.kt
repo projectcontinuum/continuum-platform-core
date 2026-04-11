@@ -30,23 +30,36 @@ class CredentialTypeController(
   }
 
   @GetMapping("/{type}")
-  fun getType(@PathVariable type: String): ResponseEntity<CredentialTypeResponse> {
-    val response = credentialTypeService.getType(type)
+  fun getTypeVersions(@PathVariable type: String): ResponseEntity<List<CredentialTypeResponse>> {
+    val response = credentialTypeService.getTypeVersions(type)
     return ResponseEntity.ok(response)
   }
 
-  @PutMapping("/{type}")
+  @GetMapping("/{type}/{version}")
+  fun getType(
+    @PathVariable type: String,
+    @PathVariable version: String
+  ): ResponseEntity<CredentialTypeResponse> {
+    val response = credentialTypeService.getType(type, version)
+    return ResponseEntity.ok(response)
+  }
+
+  @PutMapping("/{type}/{version}")
   fun updateType(
     @PathVariable type: String,
+    @PathVariable version: String,
     @Valid @RequestBody request: CredentialTypeUpdateRequest
   ): ResponseEntity<CredentialTypeResponse> {
-    val response = credentialTypeService.updateType(type, request)
+    val response = credentialTypeService.updateType(type, version, request)
     return ResponseEntity.ok(response)
   }
 
-  @DeleteMapping("/{type}")
-  fun deleteType(@PathVariable type: String): ResponseEntity<Void> {
-    credentialTypeService.deleteType(type)
+  @DeleteMapping("/{type}/{version}")
+  fun deleteType(
+    @PathVariable type: String,
+    @PathVariable version: String
+  ): ResponseEntity<Void> {
+    credentialTypeService.deleteType(type, version)
     return ResponseEntity.noContent().build()
   }
 }
