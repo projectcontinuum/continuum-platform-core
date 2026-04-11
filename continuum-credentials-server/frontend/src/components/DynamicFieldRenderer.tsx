@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { JsonForms } from '@jsonforms/react';
-import type { UISchemaElement } from '@jsonforms/core';
+import type { UISchemaElement, JsonSchema } from '@jsonforms/core';
 import {
   materialRenderers,
   materialCells,
@@ -16,6 +16,32 @@ interface DynamicFieldRendererProps {
   uiSchema: Record<string, unknown>;
   data: Record<string, string>;
   onChange: (data: Record<string, string>) => void;
+}
+
+/**
+ * Check if a schema has simple string/number/boolean properties that
+ * JSON Forms material renderers can handle directly (i.e., flat fields,
+ * not nested objects with additionalProperties).
+ */
+function hasRenderableProperties(schema: Record<string, unknown>): boolean {
+  if (schema.type !== 'object') return false;
+  const props = schema.properties as Record<string, Record<string, unknown>> | undefined;
+  if (!props || Object.keys(props).length === 0) return false;
+
+  // Check that at least one property is a simple type (string, number, boolean, integer)
+  // and not a nested object with additionalProperties (which is a map/dictionary pattern)
+  return Object.values(props).some((prop) => {
+    const propType = prop.type;
+    return propType === 'string' || propType === 'number' || propType === 'integer' || propType === 'boolean';
+  });
+}
+
+/**
+ * Check if a uiSchema is a valid JSON Forms UISchemaElement.
+ * JSON Forms expects { "type": "...", "elements": [...] } or similar.
+ */
+function isValidJsonFormsUiSchema(uiSchema: Record<string, unknown>): boolean {
+  return typeof uiSchema.type === 'string' && 'type' in uiSchema;
 }
 
 export function DynamicFieldRenderer({ type, schema, uiSchema, data, onChange }: DynamicFieldRendererProps) {
@@ -59,21 +85,29 @@ export function DynamicFieldRenderer({ type, schema, uiSchema, data, onChange }:
     },
   }), [isDark]);
 
-  // For "generic" type with empty/permissive schema, use KeyValueEditor
-  const isGenericType = type === 'generic';
-  const hasNoProperties = !schema.properties || Object.keys(schema.properties as object).length === 0;
+  // Determine if this type should use the KeyValueEditor fallback:
+  // - "generic" type (case-insensitive)
+  // - Schema has no renderable simple properties (e.g., only has additionalProperties maps)
+  // - Schema is empty or missing
+  const isGenericType = type.toLowerCase() === 'generic';
+  const renderable = hasRenderableProperties(schema);
 
-  if (isGenericType || hasNoProperties) {
+  if (isGenericType || !renderable) {
     return <KeyValueEditor data={data} onChange={onChange} />;
   }
+
+  // Only pass uiSchema if it's a valid JSON Forms UISchemaElement
+  const validUiSchema = isValidJsonFormsUiSchema(uiSchema)
+    ? (uiSchema as unknown as UISchemaElement)
+    : undefined;
 
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline enableColorScheme />
       <div className="json-forms-container">
         <JsonForms
-          schema={schema}
-          uischema={Object.keys(uiSchema).length > 0 ? (uiSchema as unknown as UISchemaElement) : undefined}
+          schema={schema as JsonSchema}
+          uischema={validUiSchema}
           data={data}
           renderers={materialRenderers}
           cells={materialCells}

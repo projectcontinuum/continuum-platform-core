@@ -13,11 +13,12 @@ interface TypeBadgeProps {
 }
 
 export function TypeBadge({ type }: TypeBadgeProps) {
-  const colorClass = TYPE_COLORS[type] ?? DEFAULT_COLOR;
+  const normalised = type.toLowerCase();
+  const colorClass = TYPE_COLORS[normalised] ?? DEFAULT_COLOR;
 
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${colorClass}`}>
-      {type}
+      {normalised}
     </span>
   );
 }
