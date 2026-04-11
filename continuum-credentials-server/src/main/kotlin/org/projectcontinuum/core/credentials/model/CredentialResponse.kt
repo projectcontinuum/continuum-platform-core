@@ -6,6 +6,7 @@ data class CredentialResponse(
   val userId: String,
   val name: String,
   val type: String,
+  val typeVersion: String,
   val data: Map<String, String>,
   val description: String?,
   val createdBy: String,

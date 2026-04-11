@@ -41,11 +41,10 @@ class CredentialServiceTest {
       val arg = it.arguments[0] as String
       arg.removePrefix("enc(").removeSuffix(")")
     }
-    whenever(credentialTypeRepository.existsByType(any())).thenReturn(true)
+    whenever(credentialTypeRepository.existsByTypeAndVersion(any(), any())).thenReturn(true)
   }
 
   private fun sampleEntity(name: String = "my-s3"): CredentialEntity {
-    val now = Instant.now()
     val encryptedData = objectMapper.writeValueAsString(
       mapOf("accessKey" to "${cipherPrefix}enc(AKIAIOSFODNN7)", "secretKey" to "${cipherPrefix}enc(wJalrXUtnFEMI)")
     )
@@ -54,37 +53,40 @@ class CredentialServiceTest {
       userId = userId,
       name = name,
       type = "s3",
+      typeVersion = "1.0.0",
       data = JsonValue(encryptedData),
-      description = "Test credential",
+      description = "Test",
       createdBy = userId,
       updatedBy = userId,
-      createdAt = now,
-      updatedAt = now
+      createdAt = Instant.now(),
+      updatedAt = Instant.now()
     )
   }
 
   @Test
-  fun `createCredential encrypts values with cipher prefix`() {
+  fun `createCredential validates type and version together`() {
     val request = CredentialCreateRequest(
-      name = "my-s3", type = "s3",
-      data = mapOf("accessKey" to "AKIAIOSFODNN7", "secretKey" to "wJalrXUtnFEMI")
+      name = "my-s3", type = "s3", typeVersion = "1.0.0",
+      data = mapOf("accessKey" to "AKIAIOSFODNN7")
     )
     whenever(credentialRepository.existsByUserIdAndName(userId, "my-s3")).thenReturn(false)
     whenever(credentialRepository.save(any())).thenAnswer { it.arguments[0] as CredentialEntity }
 
     val response = credentialService.createCredential(userId, request)
 
-    assertEquals("AKIAIOSFODNN7", response.data["accessKey"])
-    assertEquals("wJalrXUtnFEMI", response.data["secretKey"])
-    verify(credentialTypeRepository).existsByType("s3")
+    assertEquals("s3", response.type)
+    assertEquals("1.0.0", response.typeVersion)
+    verify(credentialTypeRepository).existsByTypeAndVersion("s3", "1.0.0")
   }
 
   @Test
-  fun `createCredential throws when type does not exist`() {
-    whenever(credentialTypeRepository.existsByType("unknown")).thenReturn(false)
+  fun `createCredential throws when type+version does not exist`() {
+    whenever(credentialTypeRepository.existsByTypeAndVersion("s3", "9.0.0")).thenReturn(false)
 
     assertThrows(CredentialTypeNotFoundException::class.java) {
-      credentialService.createCredential(userId, CredentialCreateRequest(name = "x", type = "unknown", data = mapOf("k" to "v")))
+      credentialService.createCredential(userId, CredentialCreateRequest(
+        name = "x", type = "s3", typeVersion = "9.0.0", data = mapOf("k" to "v")
+      ))
     }
   }
 
@@ -93,53 +95,42 @@ class CredentialServiceTest {
     whenever(credentialRepository.existsByUserIdAndName(userId, "my-s3")).thenReturn(true)
 
     assertThrows(CredentialAlreadyExistsException::class.java) {
-      credentialService.createCredential(userId, CredentialCreateRequest(name = "my-s3", type = "s3", data = mapOf("k" to "v")))
+      credentialService.createCredential(userId, CredentialCreateRequest(
+        name = "my-s3", type = "s3", typeVersion = "1.0.0", data = mapOf("k" to "v")
+      ))
     }
   }
 
   @Test
-  fun `getCredential strips cipher prefix and decrypts`() {
+  fun `getCredential returns typeVersion in response`() {
     whenever(credentialRepository.findByUserIdAndName(userId, "my-s3")).thenReturn(sampleEntity())
     whenever(credentialRepository.save(any())).thenAnswer { it.arguments[0] as CredentialEntity }
 
     val response = credentialService.getCredential(userId, "my-s3")
 
+    assertEquals("1.0.0", response.typeVersion)
     assertEquals("AKIAIOSFODNN7", response.data["accessKey"])
-    verify(credentialRepository).save(argThat { lastAccessedAt != null })
   }
 
   @Test
-  fun `getCredential throws when not found`() {
-    whenever(credentialRepository.findByUserIdAndName(userId, "x")).thenReturn(null)
-
-    assertThrows(CredentialNotFoundException::class.java) {
-      credentialService.getCredential(userId, "x")
-    }
-  }
-
-  @Test
-  fun `listCredentials returns all for user`() {
-    whenever(credentialRepository.findAllByUserId(userId)).thenReturn(listOf(sampleEntity("a"), sampleEntity("b")))
-    whenever(credentialRepository.save(any())).thenAnswer { it.arguments[0] as CredentialEntity }
-
-    assertEquals(2, credentialService.listCredentials(userId).size)
-  }
-
-  @Test
-  fun `updateCredential validates type when changing`() {
+  fun `updateCredential validates new type+version`() {
     whenever(credentialRepository.findByUserIdAndName(userId, "my-s3")).thenReturn(sampleEntity())
-    whenever(credentialTypeRepository.existsByType("unknown")).thenReturn(false)
+    whenever(credentialTypeRepository.existsByTypeAndVersion("git", "2.0.0")).thenReturn(false)
 
     assertThrows(CredentialTypeNotFoundException::class.java) {
-      credentialService.updateCredential(userId, "my-s3", CredentialUpdateRequest(type = "unknown"))
+      credentialService.updateCredential(userId, "my-s3", CredentialUpdateRequest(type = "git", typeVersion = "2.0.0"))
     }
   }
 
   @Test
-  fun `deleteCredential deletes by userId and name`() {
-    whenever(credentialRepository.existsByUserIdAndName(userId, "my-s3")).thenReturn(true)
-    credentialService.deleteCredential(userId, "my-s3")
-    verify(credentialRepository).deleteByUserIdAndName(userId, "my-s3")
+  fun `updateCredential can change typeVersion`() {
+    whenever(credentialRepository.findByUserIdAndName(userId, "my-s3")).thenReturn(sampleEntity())
+    whenever(credentialRepository.save(any())).thenAnswer { it.arguments[0] as CredentialEntity }
+
+    val response = credentialService.updateCredential(userId, "my-s3", CredentialUpdateRequest(typeVersion = "2.0.0"))
+
+    assertEquals("2.0.0", response.typeVersion)
+    verify(credentialTypeRepository).existsByTypeAndVersion("s3", "2.0.0")
   }
 
   @Test

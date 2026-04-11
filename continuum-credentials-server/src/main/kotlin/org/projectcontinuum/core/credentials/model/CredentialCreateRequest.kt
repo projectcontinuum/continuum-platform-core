@@ -18,6 +18,10 @@ data class CredentialCreateRequest(
   @field:Size(max = 50, message = "Type must be at most 50 characters")
   val type: String,
 
+  @field:NotBlank(message = "Type version is required")
+  @field:Size(max = 50, message = "Type version must be at most 50 characters")
+  val typeVersion: String,
+
   @field:NotEmpty(message = "Data must not be empty")
   val data: Map<String, String>,
 

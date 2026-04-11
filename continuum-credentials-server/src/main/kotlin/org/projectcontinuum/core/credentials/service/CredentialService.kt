@@ -29,7 +29,7 @@ class CredentialService(
   private val mapTypeRef = object : TypeReference<Map<String, String>>() {}
 
   fun createCredential(userId: String, request: CredentialCreateRequest): CredentialResponse {
-    validateType(request.type)
+    validateTypeAndVersion(request.type, request.typeVersion)
 
     if (credentialRepository.existsByUserIdAndName(userId, request.name)) {
       throw CredentialAlreadyExistsException(
@@ -43,6 +43,7 @@ class CredentialService(
       userId = userId,
       name = request.name,
       type = request.type,
+      typeVersion = request.typeVersion,
       data = encryptMap(request.data),
       description = request.description,
       createdBy = userId,
@@ -87,8 +88,10 @@ class CredentialService(
     val entity = credentialRepository.findByUserIdAndName(userId, name)
       ?: throw CredentialNotFoundException("Credential '$name' not found for user '$userId'")
 
-    if (request.type != null) {
-      validateType(request.type)
+    val newType = request.type ?: entity.type
+    val newTypeVersion = request.typeVersion ?: entity.typeVersion
+    if (request.type != null || request.typeVersion != null) {
+      validateTypeAndVersion(newType, newTypeVersion)
     }
 
     if (request.name != null && request.name != entity.name) {
@@ -101,7 +104,8 @@ class CredentialService(
 
     val updatedEntity = entity.copy(
       name = request.name ?: entity.name,
-      type = request.type ?: entity.type,
+      type = newType,
+      typeVersion = newTypeVersion,
       data = if (request.data != null) encryptMap(request.data) else entity.data,
       description = request.description ?: entity.description,
       updatedBy = userId,
@@ -121,9 +125,11 @@ class CredentialService(
     logger.info("Deleted credential '{}' for user '{}'", name, userId)
   }
 
-  private fun validateType(type: String) {
-    if (!credentialTypeRepository.existsByType(type)) {
-      throw CredentialTypeNotFoundException("Credential type '$type' does not exist")
+  private fun validateTypeAndVersion(type: String, typeVersion: String) {
+    if (!credentialTypeRepository.existsByTypeAndVersion(type, typeVersion)) {
+      throw CredentialTypeNotFoundException(
+        "Credential type '$type' version '$typeVersion' does not exist"
+      )
     }
   }
 
@@ -145,6 +151,7 @@ class CredentialService(
       userId = entity.userId,
       name = entity.name,
       type = entity.type,
+      typeVersion = entity.typeVersion,
       data = decryptMap(entity.data),
       description = entity.description,
       createdBy = entity.createdBy,

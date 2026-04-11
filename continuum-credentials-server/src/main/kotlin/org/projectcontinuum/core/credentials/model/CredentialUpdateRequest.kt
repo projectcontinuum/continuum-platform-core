@@ -14,6 +14,9 @@ data class CredentialUpdateRequest(
   @field:Size(max = 50, message = "Type must be at most 50 characters")
   val type: String? = null,
 
+  @field:Size(max = 50, message = "Type version must be at most 50 characters")
+  val typeVersion: String? = null,
+
   val data: Map<String, String>? = null,
 
   @field:Size(max = 1000, message = "Description must be at most 1000 characters")

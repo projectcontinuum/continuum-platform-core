@@ -9,12 +9,9 @@ CREATE TABLE IF NOT EXISTS credential_types (
     credential_type_version VARCHAR(50) NOT NULL DEFAULT '1.0.0',
     created_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at         TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    entity_version     BIGINT       NOT NULL DEFAULT 0
+    entity_version     BIGINT       NOT NULL DEFAULT 0,
+    UNIQUE (type, credential_type_version)
 );
-
--- Unique constraint: same type + version combination cannot exist twice
-CREATE UNIQUE INDEX IF NOT EXISTS idx_credential_types_type_version
-    ON credential_types (type, credential_type_version);
 
 -- Index for looking up all versions of a type
 CREATE INDEX IF NOT EXISTS idx_credential_types_type
@@ -25,6 +22,7 @@ CREATE TABLE IF NOT EXISTS credentials (
     user_id          VARCHAR(255)  NOT NULL,
     name             VARCHAR(255)  NOT NULL,
     type             VARCHAR(50)   NOT NULL,
+    type_version     VARCHAR(50)   NOT NULL,
     data             TEXT          NOT NULL,
     description      VARCHAR(1000),
     created_by       VARCHAR(255)  NOT NULL,
@@ -32,7 +30,8 @@ CREATE TABLE IF NOT EXISTS credentials (
     created_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at       TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_accessed_at TIMESTAMP,
-    entity_version   BIGINT        NOT NULL DEFAULT 0
+    entity_version   BIGINT        NOT NULL DEFAULT 0,
+    FOREIGN KEY (type, type_version) REFERENCES credential_types(type, credential_type_version)
 );
 
 -- Unique constraint: credential name must be unique per user

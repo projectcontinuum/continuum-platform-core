@@ -18,6 +18,8 @@ data class CredentialEntity(
   val name: String,
   @Column("type")
   val type: String,
+  @Column("type_version")
+  val typeVersion: String,
   @Column("data")
   val data: JsonValue,
   @Column("description")
