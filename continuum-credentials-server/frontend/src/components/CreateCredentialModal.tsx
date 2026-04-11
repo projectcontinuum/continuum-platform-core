@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
+import { CustomSelect } from './CustomSelect';
 import { DynamicFieldRenderer } from './DynamicFieldRenderer';
 import { useTheme } from '../hooks/useTheme';
 import type { CredentialCreateRequest, CredentialTypeResponse } from '../types/api';
@@ -143,20 +144,16 @@ export function CreateCredentialModal({
           <label htmlFor="credType" className="block text-sm font-medium text-fg">
             Credential Type <span className="text-red-500">*</span>
           </label>
-          <select
-            id="credType"
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-divider bg-base px-3 py-2 text-fg focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-            required
-          >
-            <option value="">Select a type...</option>
-            {uniqueTypeNames.map((typeName) => (
-              <option key={typeName} value={typeName}>
-                {typeName}
-              </option>
-            ))}
-          </select>
+          <div className="mt-1">
+            <CustomSelect
+              id="credType"
+              value={selectedType}
+              onChange={setSelectedType}
+              options={uniqueTypeNames.map((t) => ({ value: t, label: t }))}
+              placeholder="Select a type..."
+              required
+            />
+          </div>
         </div>
 
         {/* Type Version (if multiple versions exist) */}
@@ -165,16 +162,15 @@ export function CreateCredentialModal({
             <label htmlFor="credVersion" className="block text-sm font-medium text-fg">
               Version
             </label>
-            <select
-              id="credVersion"
-              value={selectedVersion}
-              onChange={(e) => setSelectedVersion(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-divider bg-base px-3 py-2 text-fg focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-            >
-              {versionsForType.map((v) => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <CustomSelect
+                id="credVersion"
+                value={selectedVersion}
+                onChange={setSelectedVersion}
+                options={versionsForType.map((v) => ({ value: v, label: v }))}
+                placeholder="Select version..."
+              />
+            </div>
           </div>
         )}
 

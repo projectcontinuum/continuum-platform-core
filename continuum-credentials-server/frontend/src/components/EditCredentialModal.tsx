@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
+import { CustomSelect } from './CustomSelect';
 import { DynamicFieldRenderer } from './DynamicFieldRenderer';
 import { useTheme } from '../hooks/useTheme';
 import type { CredentialResponse, CredentialUpdateRequest, CredentialTypeResponse } from '../types/api';
@@ -131,16 +132,15 @@ export function EditCredentialModal({
             <label htmlFor="editCredVersion" className="block text-sm font-medium text-fg">
               Version
             </label>
-            <select
-              id="editCredVersion"
-              value={selectedVersion}
-              onChange={(e) => setSelectedVersion(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-divider bg-base px-3 py-2 text-fg focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-            >
-              {versionsForType.map((v) => (
-                <option key={v} value={v}>{v}</option>
-              ))}
-            </select>
+            <div className="mt-1">
+              <CustomSelect
+                id="editCredVersion"
+                value={selectedVersion}
+                onChange={setSelectedVersion}
+                options={versionsForType.map((v) => ({ value: v, label: v }))}
+                placeholder="Select version..."
+              />
+            </div>
           </div>
         )}
 
