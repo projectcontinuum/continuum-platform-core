@@ -33,6 +33,9 @@ dependencies {
   // JSON
   implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 
+  // JSON Schema validation
+  implementation("com.networknt:json-schema-validator:1.5.6")
+
   // Database
   implementation("org.springframework.boot:spring-boot-starter-data-jdbc")
   implementation("org.postgresql:postgresql")

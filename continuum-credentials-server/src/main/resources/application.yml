@@ -18,7 +18,7 @@ continuum.core:
   credentials:
     storage-backend: ${CREDENTIALS_STORAGE_BACKEND:postgres}
     encryption:
-      master-key: ${CREDENTIALS_ENCRYPTION_MASTER_KEY:}
+      master-key: ${CREDENTIALS_ENCRYPTION_MASTER_KEY}
 
 springdoc:
   packages-to-scan: org.projectcontinuum.core.credentials.controller

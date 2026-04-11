@@ -32,6 +32,12 @@ class GlobalExceptionHandler {
       .body(mapOf("error" to (ex.message ?: "Credential already exists")))
   }
 
+  @ExceptionHandler(CredentialDataValidationException::class)
+  fun handleDataValidation(ex: CredentialDataValidationException): ResponseEntity<Map<String, String>> {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+      .body(mapOf("error" to (ex.message ?: "Credential data validation failed")))
+  }
+
   @ExceptionHandler(EncryptionException::class)
   fun handleEncryptionError(ex: EncryptionException): ResponseEntity<Map<String, String>> {
     logger.error("Encryption error", ex)

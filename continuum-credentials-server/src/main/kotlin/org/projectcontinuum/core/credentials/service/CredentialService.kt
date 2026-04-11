@@ -1,10 +1,14 @@
 package org.projectcontinuum.core.credentials.service
 
 import com.fasterxml.jackson.core.type.TypeReference
+import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.networknt.schema.JsonSchemaFactory
+import com.networknt.schema.SpecVersion
 import org.projectcontinuum.core.credentials.entity.CredentialEntity
 import org.projectcontinuum.core.credentials.entity.JsonValue
 import org.projectcontinuum.core.credentials.exception.CredentialAlreadyExistsException
+import org.projectcontinuum.core.credentials.exception.CredentialDataValidationException
 import org.projectcontinuum.core.credentials.exception.CredentialNotFoundException
 import org.projectcontinuum.core.credentials.exception.CredentialTypeNotFoundException
 import org.projectcontinuum.core.credentials.model.CredentialCreateRequest
@@ -27,9 +31,15 @@ class CredentialService(
 
   private val logger = LoggerFactory.getLogger(CredentialService::class.java)
   private val mapTypeRef = object : TypeReference<Map<String, String>>() {}
+  private val schemaFactory = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V4)
 
   fun createCredential(userId: String, request: CredentialCreateRequest): CredentialResponse {
-    validateTypeAndVersion(request.type, request.typeVersion)
+    val typeEntity = credentialTypeRepository.findByTypeAndVersion(request.type, request.typeVersion)
+      ?: throw CredentialTypeNotFoundException(
+        "Credential type '${request.type}' version '${request.typeVersion}' does not exist"
+      )
+
+    validateDataAgainstSchema(request.data, typeEntity.schema)
 
     if (credentialRepository.existsByUserIdAndName(userId, request.name)) {
       throw CredentialAlreadyExistsException(
@@ -90,8 +100,16 @@ class CredentialService(
 
     val newType = request.type ?: entity.type
     val newTypeVersion = request.typeVersion ?: entity.typeVersion
-    if (request.type != null || request.typeVersion != null) {
-      validateTypeAndVersion(newType, newTypeVersion)
+
+    if (request.type != null || request.typeVersion != null || request.data != null) {
+      val typeEntity = credentialTypeRepository.findByTypeAndVersion(newType, newTypeVersion)
+        ?: throw CredentialTypeNotFoundException(
+          "Credential type '$newType' version '$newTypeVersion' does not exist"
+        )
+
+      if (request.data != null) {
+        validateDataAgainstSchema(request.data, typeEntity.schema)
+      }
     }
 
     if (request.name != null && request.name != entity.name) {
@@ -125,10 +143,18 @@ class CredentialService(
     logger.info("Deleted credential '{}' for user '{}'", name, userId)
   }
 
-  private fun validateTypeAndVersion(type: String, typeVersion: String) {
-    if (!credentialTypeRepository.existsByTypeAndVersion(type, typeVersion)) {
-      throw CredentialTypeNotFoundException(
-        "Credential type '$type' version '$typeVersion' does not exist"
+  private fun validateDataAgainstSchema(data: Map<String, String>, schema: JsonValue) {
+    val schemaNode = objectMapper.readTree(schema.value)
+    if (schemaNode.isEmpty) return
+
+    val dataNode: JsonNode = objectMapper.valueToTree(data)
+    val jsonSchema = schemaFactory.getSchema(schemaNode)
+    val errors = jsonSchema.validate(dataNode)
+
+    if (errors.isNotEmpty()) {
+      val errorMessages = errors.joinToString("; ") { it.message }
+      throw CredentialDataValidationException(
+        "Credential data does not match the schema: $errorMessages"
       )
     }
   }
