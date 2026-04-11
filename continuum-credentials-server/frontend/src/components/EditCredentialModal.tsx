@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Modal } from './Modal';
 import { Button } from './Button';
 import { CustomSelect } from './CustomSelect';
@@ -34,6 +34,25 @@ export function EditCredentialModal({
   const [error, setError] = useState<string | null>(null);
   const [selectedVersion, setSelectedVersion] = useState('');
 
+  // Track which credential we've synced from, so we sync synchronously
+  // during render (not in useEffect which runs after render)
+  const [syncedFrom, setSyncedFrom] = useState<string | null>(null);
+  const credentialKey = credential?.name ?? null;
+
+  if (isOpen && credentialKey !== null && credentialKey !== syncedFrom) {
+    // Synchronous state update during render — runs before children mount
+    setData(credential!.data ?? {});
+    setDescription(credential!.description ?? '');
+    setSelectedVersion(credential!.typeVersion);
+    setError(null);
+    setSyncedFrom(credentialKey);
+  }
+
+  // Reset tracking when modal closes
+  if (!isOpen && syncedFrom !== null) {
+    setSyncedFrom(null);
+  }
+
   // Available versions for the credential's type
   const versionsForType = useMemo(() =>
     credentialTypes
@@ -50,16 +69,6 @@ export function EditCredentialModal({
   );
   const schema = selectedTypeObj?.schema ?? EMPTY_SCHEMA;
   const uiSchema = selectedTypeObj?.uiSchema ?? EMPTY_UI_SCHEMA;
-
-  // Populate form when credential changes
-  useEffect(() => {
-    if (credential && isOpen) {
-      setData(credential.data ?? {});
-      setDescription(credential.description ?? '');
-      setSelectedVersion(credential.typeVersion);
-      setError(null);
-    }
-  }, [credential, isOpen]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,6 +160,7 @@ export function EditCredentialModal({
           </label>
           <div className="rounded-lg border border-divider bg-surface/30 p-4">
             <DynamicFieldRenderer
+              key={credential.name}
               type={credential.type}
               schema={schema}
               uiSchema={uiSchema}
