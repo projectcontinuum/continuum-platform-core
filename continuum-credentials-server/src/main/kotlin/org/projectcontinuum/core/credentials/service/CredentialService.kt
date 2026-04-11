@@ -94,6 +94,15 @@ class CredentialService(
     }
   }
 
+  fun getCredentialsByTypeAndVersion(userId: String, type: String, typeVersion: String): List<CredentialResponse> {
+    val entities = credentialRepository.findAllByUserIdAndTypeAndTypeVersion(userId, type, typeVersion)
+    return entities.map { entity ->
+      val updated = entity.copy(lastAccessedAt = Instant.now())
+      credentialRepository.save(updated)
+      toResponse(updated)
+    }
+  }
+
   fun updateCredential(userId: String, name: String, request: CredentialUpdateRequest): CredentialResponse {
     val entity = credentialRepository.findByUserIdAndName(userId, name)
       ?: throw CredentialNotFoundException("Credential '$name' not found for user '$userId'")

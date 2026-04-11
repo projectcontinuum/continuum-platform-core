@@ -17,6 +17,9 @@ interface SpringDataCredentialRepository : CrudRepository<CredentialEntity, UUID
   @Query("SELECT * FROM credentials WHERE user_id = :userId AND type = :type ORDER BY created_at DESC")
   fun findAllByUserIdAndType(userId: String, type: String): List<CredentialEntity>
 
+  @Query("SELECT * FROM credentials WHERE user_id = :userId AND type = :type AND type_version = :typeVersion ORDER BY created_at DESC")
+  fun findAllByUserIdAndTypeAndTypeVersion(userId: String, type: String, typeVersion: String): List<CredentialEntity>
+
   @Modifying
   @Query("DELETE FROM credentials WHERE user_id = :userId AND name = :name")
   fun deleteByUserIdAndName(userId: String, name: String)

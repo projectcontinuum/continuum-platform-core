@@ -18,6 +18,9 @@ class PostgresCredentialRepository(
   override fun findAllByUserIdAndType(userId: String, type: String): List<CredentialEntity> =
     springDataRepository.findAllByUserIdAndType(userId, type)
 
+  override fun findAllByUserIdAndTypeAndTypeVersion(userId: String, type: String, typeVersion: String): List<CredentialEntity> =
+    springDataRepository.findAllByUserIdAndTypeAndTypeVersion(userId, type, typeVersion)
+
   override fun deleteByUserIdAndName(userId: String, name: String) =
     springDataRepository.deleteByUserIdAndName(userId, name)
 

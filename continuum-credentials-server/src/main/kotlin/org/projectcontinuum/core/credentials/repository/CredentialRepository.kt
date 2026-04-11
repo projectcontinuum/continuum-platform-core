@@ -13,6 +13,8 @@ interface CredentialRepository {
 
   fun findAllByUserIdAndType(userId: String, type: String): List<CredentialEntity>
 
+  fun findAllByUserIdAndTypeAndTypeVersion(userId: String, type: String, typeVersion: String): List<CredentialEntity>
+
   fun deleteByUserIdAndName(userId: String, name: String)
 
   fun existsByUserIdAndName(userId: String, name: String): Boolean

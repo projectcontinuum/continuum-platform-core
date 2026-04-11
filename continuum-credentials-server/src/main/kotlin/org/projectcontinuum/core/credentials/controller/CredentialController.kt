@@ -50,6 +50,16 @@ class CredentialController(
     return ResponseEntity.ok(response)
   }
 
+  @GetMapping("/type/{type}/{version}")
+  fun getCredentialsByTypeAndVersion(
+    @RequestHeader("x-continuum-user-id", required = false, defaultValue = "anonymous") userId: String,
+    @PathVariable type: String,
+    @PathVariable version: String
+  ): ResponseEntity<List<CredentialResponse>> {
+    val response = credentialService.getCredentialsByTypeAndVersion(userId, type, version)
+    return ResponseEntity.ok(response)
+  }
+
   @PutMapping("/{name}")
   fun updateCredential(
     @RequestHeader("x-continuum-user-id", required = false, defaultValue = "anonymous") userId: String,
