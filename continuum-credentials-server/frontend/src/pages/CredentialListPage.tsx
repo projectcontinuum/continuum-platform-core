@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useCredentials } from '../hooks/useCredentials';
 import { useCredentialTypes } from '../hooks/useCredentialTypes';
@@ -28,6 +28,7 @@ export function CredentialListPage() {
   const [editingCredential, setEditingCredential] = useState<CredentialResponse | null>(null);
   const [deletingCredential, setDeletingCredential] = useState<CredentialResponse | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const {
     credentials,
@@ -86,6 +87,19 @@ export function CredentialListPage() {
     return acc;
   }, {});
 
+  // Filter credentials by search query (name, type, description, createdBy)
+  const filteredCredentials = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return credentials;
+    return credentials.filter(
+      (cred) =>
+        cred.name.toLowerCase().includes(q) ||
+        cred.type.toLowerCase().includes(q) ||
+        cred.createdBy.toLowerCase().includes(q) ||
+        (cred.description?.toLowerCase().includes(q) ?? false),
+    );
+  }, [credentials, searchQuery]);
+
   return (
     <div className="flex min-h-screen flex-col bg-base">
       <Header />
@@ -139,7 +153,7 @@ export function CredentialListPage() {
         <section className="py-8">
           <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
             {/* Actions Bar */}
-            <div className="mb-6 flex items-center justify-between">
+            <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <Button onClick={() => setShowCreateModal(true)}>
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -154,6 +168,38 @@ export function CredentialListPage() {
                   Refresh
                 </Button>
               </div>
+
+              {/* Search */}
+              {!loading && !error && credentials.length > 0 && (
+                <div className="relative">
+                  <svg
+                    className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search by name or type..."
+                    className="w-full rounded-lg border border-divider bg-base py-2 pl-9 pr-3 text-sm text-fg placeholder:text-fg-muted/50 focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent sm:w-64"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-2 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-fg-muted hover:text-fg"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Content */}
@@ -166,11 +212,30 @@ export function CredentialListPage() {
             )}
 
             {!loading && !error && credentials.length > 0 && (
-              <CredentialTable
-                credentials={credentials}
-                onEdit={(cred) => setEditingCredential(cred)}
-                onDelete={(cred) => setDeletingCredential(cred)}
-              />
+              <>
+                {filteredCredentials.length > 0 ? (
+                  <CredentialTable
+                    credentials={filteredCredentials}
+                    onEdit={(cred) => setEditingCredential(cred)}
+                    onDelete={(cred) => setDeletingCredential(cred)}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-divider bg-surface/30 px-6 py-12">
+                    <svg className="mb-3 h-10 w-10 text-fg-muted/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <p className="text-sm text-fg-muted">
+                      No credentials matching "<span className="font-medium text-fg">{searchQuery}</span>"
+                    </p>
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="mt-2 text-sm font-medium text-accent hover:text-highlight"
+                    >
+                      Clear search
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </section>
