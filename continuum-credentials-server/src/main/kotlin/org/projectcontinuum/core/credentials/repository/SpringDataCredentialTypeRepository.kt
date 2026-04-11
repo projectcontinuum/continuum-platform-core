@@ -1,7 +1,6 @@
 package org.projectcontinuum.core.credentials.repository
 
 import org.projectcontinuum.core.credentials.entity.CredentialTypeEntity
-import org.springframework.data.jdbc.repository.query.Modifying
 import org.springframework.data.jdbc.repository.query.Query
 import org.springframework.data.repository.CrudRepository
 import java.util.UUID
@@ -13,10 +12,6 @@ interface SpringDataCredentialTypeRepository : CrudRepository<CredentialTypeEnti
 
   @Query("SELECT * FROM credential_types WHERE type = :type ORDER BY created_at DESC")
   fun findAllByType(type: String): List<CredentialTypeEntity>
-
-  @Modifying
-  @Query("DELETE FROM credential_types WHERE type = :type AND credential_type_version = :version")
-  fun deleteByTypeAndVersion(type: String, version: String)
 
   @Query("SELECT COUNT(*) > 0 FROM credential_types WHERE type = :type")
   fun existsByType(type: String): Boolean

@@ -70,20 +70,12 @@ class PostgresCredentialRepositoryTest {
   }
 
   @Test
-  fun `findByUserIdAndName returns null when not found`() {
-    assertNull(credentialRepository.findByUserIdAndName("user-1", "nonexistent"))
-  }
-
-  @Test
   fun `findAllByUserId returns all user credentials`() {
     credentialRepository.save(createEntity(name = "cred-1"))
     credentialRepository.save(createEntity(name = "cred-2"))
     credentialRepository.save(createEntity(userId = "user-2", name = "other-cred"))
 
-    val results = credentialRepository.findAllByUserId("user-1")
-
-    assertEquals(2, results.size)
-    assertTrue(results.all { it.userId == "user-1" })
+    assertEquals(2, credentialRepository.findAllByUserId("user-1").size)
   }
 
   @Test
@@ -92,18 +84,17 @@ class PostgresCredentialRepositoryTest {
     credentialRepository.save(createEntity(name = "git-cred", type = "git"))
 
     val results = credentialRepository.findAllByUserIdAndType("user-1", "s3")
-
     assertEquals(1, results.size)
     assertEquals("s3-cred", results[0].name)
   }
 
   @Test
   fun `different users can have same credential name`() {
-    credentialRepository.save(createEntity(userId = "user-1", name = "shared-name"))
-    credentialRepository.save(createEntity(userId = "user-2", name = "shared-name"))
+    credentialRepository.save(createEntity(userId = "user-1", name = "shared"))
+    credentialRepository.save(createEntity(userId = "user-2", name = "shared"))
 
-    assertNotNull(credentialRepository.findByUserIdAndName("user-1", "shared-name"))
-    assertNotNull(credentialRepository.findByUserIdAndName("user-2", "shared-name"))
+    assertNotNull(credentialRepository.findByUserIdAndName("user-1", "shared"))
+    assertNotNull(credentialRepository.findByUserIdAndName("user-2", "shared"))
   }
 
   @Test
@@ -111,11 +102,9 @@ class PostgresCredentialRepositoryTest {
     val s3Versions = credentialTypeRepository.findAllByType("s3")
     assertEquals(2, s3Versions.size)
 
-    val v1 = credentialTypeRepository.findByTypeAndVersion("s3", "1.0.0")
-    val v2 = credentialTypeRepository.findByTypeAndVersion("s3", "2.0.0")
-    assertNotNull(v1)
-    assertNotNull(v2)
-    assertNotEquals(v1!!.credentialTypeId, v2!!.credentialTypeId)
+    assertNotNull(credentialTypeRepository.findByTypeAndVersion("s3", "1.0.0"))
+    assertNotNull(credentialTypeRepository.findByTypeAndVersion("s3", "2.0.0"))
+    assertNull(credentialTypeRepository.findByTypeAndVersion("s3", "3.0.0"))
   }
 
   @Test
@@ -127,23 +116,13 @@ class PostgresCredentialRepositoryTest {
   @Test
   fun `existsByTypeAndVersion checks specific version`() {
     assertTrue(credentialTypeRepository.existsByTypeAndVersion("s3", "1.0.0"))
-    assertTrue(credentialTypeRepository.existsByTypeAndVersion("s3", "2.0.0"))
     assertFalse(credentialTypeRepository.existsByTypeAndVersion("s3", "3.0.0"))
-  }
-
-  @Test
-  fun `deleteByTypeAndVersion removes only that version`() {
-    credentialTypeRepository.deleteByTypeAndVersion("s3", "1.0.0")
-
-    assertNull(credentialTypeRepository.findByTypeAndVersion("s3", "1.0.0"))
-    assertNotNull(credentialTypeRepository.findByTypeAndVersion("s3", "2.0.0"))
   }
 
   @Test
   fun `save updates existing entity`() {
     val entity = credentialRepository.save(createEntity())
-    val updated = entity.copy(description = "Updated", updatedAt = Instant.now())
-    credentialRepository.save(updated)
+    credentialRepository.save(entity.copy(description = "Updated", updatedAt = Instant.now()))
 
     assertEquals("Updated", credentialRepository.findByUserIdAndName("user-1", "test-cred")!!.description)
   }

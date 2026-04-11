@@ -8,7 +8,6 @@ import org.projectcontinuum.core.credentials.exception.CredentialAlreadyExistsEx
 import org.projectcontinuum.core.credentials.exception.CredentialTypeNotFoundException
 import org.projectcontinuum.core.credentials.model.CredentialTypeCreateRequest
 import org.projectcontinuum.core.credentials.model.CredentialTypeResponse
-import org.projectcontinuum.core.credentials.model.CredentialTypeUpdateRequest
 import org.projectcontinuum.core.credentials.repository.CredentialTypeRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -39,10 +38,17 @@ class CredentialTypeService(
 
     val normalizedSchema = normalizeJson(request.schema)
     val normalizedUiSchema = normalizeJson(request.uiSchema)
+    val typeId = generateTypeId(request.type, normalizedSchema, normalizedUiSchema)
+
+    if (credentialTypeRepository.existsById(typeId)) {
+      throw CredentialAlreadyExistsException(
+        "A credential type '${request.type}' with the same schema already exists under a different version"
+      )
+    }
 
     val now = Instant.now()
     val entity = CredentialTypeEntity(
-      credentialTypeId = generateTypeId(request.type, normalizedSchema, normalizedUiSchema),
+      credentialTypeId = typeId,
       type = request.type,
       schema = JsonValue(normalizedSchema),
       uiSchema = JsonValue(normalizedUiSchema),
@@ -72,30 +78,6 @@ class CredentialTypeService(
 
   fun listTypes(): List<CredentialTypeResponse> {
     return credentialTypeRepository.findAll().map { toResponse(it) }
-  }
-
-  fun updateType(type: String, version: String, request: CredentialTypeUpdateRequest): CredentialTypeResponse {
-    val entity = credentialTypeRepository.findByTypeAndVersion(type, version)
-      ?: throw CredentialTypeNotFoundException("Credential type '$type' version '$version' not found")
-
-    val updatedEntity = entity.copy(
-      schema = if (request.schema != null) JsonValue(normalizeJson(request.schema)) else entity.schema,
-      uiSchema = if (request.uiSchema != null) JsonValue(normalizeJson(request.uiSchema)) else entity.uiSchema,
-      credentialTypeVersion = request.version ?: entity.credentialTypeVersion,
-      updatedAt = Instant.now()
-    )
-
-    val saved = credentialTypeRepository.save(updatedEntity)
-    logger.info("Updated credential type '{}' v{}", saved.type, saved.credentialTypeVersion)
-    return toResponse(saved)
-  }
-
-  fun deleteType(type: String, version: String) {
-    if (!credentialTypeRepository.existsByTypeAndVersion(type, version)) {
-      throw CredentialTypeNotFoundException("Credential type '$type' version '$version' not found")
-    }
-    credentialTypeRepository.deleteByTypeAndVersion(type, version)
-    logger.info("Deleted credential type '{}' v{}", type, version)
   }
 
   private fun normalizeJson(data: Map<String, Any?>): String {

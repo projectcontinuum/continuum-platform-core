@@ -1,6 +1,7 @@
 package org.projectcontinuum.core.credentials.repository
 
 import org.projectcontinuum.core.credentials.entity.CredentialTypeEntity
+import java.util.UUID
 
 class PostgresCredentialTypeRepository(
   private val springDataRepository: SpringDataCredentialTypeRepository
@@ -8,6 +9,9 @@ class PostgresCredentialTypeRepository(
 
   override fun save(entity: CredentialTypeEntity): CredentialTypeEntity =
     springDataRepository.save(entity)
+
+  override fun existsById(id: UUID): Boolean =
+    springDataRepository.existsById(id)
 
   override fun findByTypeAndVersion(type: String, version: String): CredentialTypeEntity? =
     springDataRepository.findByTypeAndVersion(type, version)
@@ -17,9 +21,6 @@ class PostgresCredentialTypeRepository(
 
   override fun findAll(): List<CredentialTypeEntity> =
     springDataRepository.findAll().toList()
-
-  override fun deleteByTypeAndVersion(type: String, version: String) =
-    springDataRepository.deleteByTypeAndVersion(type, version)
 
   override fun existsByType(type: String): Boolean =
     springDataRepository.existsByType(type)
