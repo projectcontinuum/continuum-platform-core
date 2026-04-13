@@ -13,6 +13,7 @@ import {
   CreateCredentialModal,
   EditCredentialModal,
   DeleteConfirmModal,
+  ViewCredentialModal,
   TypeBadge,
 } from '../components';
 import type { CredentialResponse } from '../types/api';
@@ -25,6 +26,7 @@ const fadeInUp = {
 export function CredentialListPage() {
   const reducedMotion = useReducedMotion() ?? false;
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [viewingCredential, setViewingCredential] = useState<CredentialResponse | null>(null);
   const [editingCredential, setEditingCredential] = useState<CredentialResponse | null>(null);
   const [deletingCredential, setDeletingCredential] = useState<CredentialResponse | null>(null);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -216,6 +218,7 @@ export function CredentialListPage() {
                 {filteredCredentials.length > 0 ? (
                   <CredentialTable
                     credentials={filteredCredentials}
+                    onView={(cred) => setViewingCredential(cred)}
                     onEdit={(cred) => setEditingCredential(cred)}
                     onDelete={(cred) => setDeletingCredential(cred)}
                   />
@@ -269,6 +272,13 @@ export function CredentialListPage() {
         isOpen={deletingCredential !== null}
         onClose={() => setDeletingCredential(null)}
         onDelete={handleDelete}
+      />
+
+      {/* View Modal */}
+      <ViewCredentialModal
+        credential={viewingCredential}
+        isOpen={viewingCredential !== null}
+        onClose={() => setViewingCredential(null)}
       />
 
       {/* Notification Toast */}

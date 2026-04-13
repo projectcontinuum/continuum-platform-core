@@ -11,5 +11,6 @@ export { CredentialTable } from './CredentialTable';
 export { CreateCredentialModal } from './CreateCredentialModal';
 export { EditCredentialModal } from './EditCredentialModal';
 export { DeleteConfirmModal } from './DeleteConfirmModal';
+export { ViewCredentialModal } from './ViewCredentialModal';
 export { DynamicFieldRenderer } from './DynamicFieldRenderer';
 export { KeyValueEditor } from './KeyValueEditor';
