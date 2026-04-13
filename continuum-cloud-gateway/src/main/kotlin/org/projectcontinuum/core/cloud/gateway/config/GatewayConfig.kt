@@ -37,6 +37,9 @@ class GatewayConfig(
 
   @Value("\${CONTINUUM_CLUSTER_MANAGER_URL:http://localhost:8082}")
   private val clusterManagerUrl: String,
+
+  @Value("\${CONTINUUM_CREDENTIALS_SERVER_URL:http://localhost:8083}")
+  private val credentialsServerUrl: String,
 ) {
 
   private val logger = LoggerFactory.getLogger(GatewayConfig::class.java)
@@ -62,6 +65,12 @@ class GatewayConfig(
   fun clusterManagerRoute(): RouterFunction<ServerResponse> =
     route("cluster-manager")
       .route(path("/cluster-manager/**")) { request -> proxy(request, clusterManagerUrl, "/cluster-manager") }
+      .build()
+
+  @Bean
+  fun credentialsServerRoute(): RouterFunction<ServerResponse> =
+    route("credentials-manager")
+      .route(path("/credentials-manager/**")) { request -> proxy(request, credentialsServerUrl, "/credentials-manager") }
       .build()
 
   private fun proxy(request: ServerRequest, backendUrl: String, prefixToStrip: String): ServerResponse {
