@@ -4,7 +4,7 @@ import org.projectcontinuum.core.commons.activity.IContinuumNodeActivity
 import org.projectcontinuum.core.commons.annotation.ContinuumNode
 import org.projectcontinuum.core.commons.constant.TaskQueues
 import org.projectcontinuum.core.commons.context.ContinuumOwnerContext
-import org.projectcontinuum.core.commons.context.CredentialContext
+import org.projectcontinuum.core.commons.context.ExecutionContext
 import org.projectcontinuum.core.commons.exception.NodeRuntimeException
 import org.projectcontinuum.core.commons.model.ContinuumWorkflowModel
 import org.projectcontinuum.core.commons.model.PortData
@@ -243,9 +243,9 @@ class ContinuumNodeActivity(
     executionStartTime.set(System.currentTimeMillis())
 
     // Resolve credentials from UI Schema before node execution.
-    // Scans propertiesUISchema for fields with options.format == "credentials",
+    // Scans propertiesUISchema for fields with options.format == "credential",
     // fetches the actual credential data from the Credentials Server,
-    // and makes it available to the node via CredentialContext.
+    // and passes it to the node via ExecutionContext.
     val ownerId = ContinuumOwnerContext.get()
     val credentials = if (ownerId != null) {
       credentialResolver.resolve(node.data.properties, node.data.propertiesUISchema, ownerId)
@@ -253,17 +253,15 @@ class ContinuumNodeActivity(
       emptyMap()
     }
 
-    CredentialContext.set(credentials)
-    try {
-      createProcessNode(nodeModel).run(
-        node = node,
-        inputs = nodeInputs,
-        nodeOutputWriter = nodeOutputWriter,
-        nodeProgressCallback = progressCallback
-      )
-    } finally {
-      CredentialContext.clear()
-    }
+    val executionContext = ExecutionContext(ownerId = ownerId, credentials = credentials)
+
+    createProcessNode(nodeModel).run(
+      node = node,
+      inputs = nodeInputs,
+      nodeOutputWriter = nodeOutputWriter,
+      nodeProgressCallback = progressCallback,
+      executionContext = executionContext
+    )
 
     progressCallback.report(NodeProgress(100))
 
