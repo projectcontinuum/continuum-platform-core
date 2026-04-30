@@ -24,7 +24,7 @@ services:
       - POSTGRES_PWD=temporal
       - POSTGRES_SEEDS=postgresql
       - DYNAMIC_CONFIG_FILE_PATH=/etc/temporal/config/dynamicconfig/development-sql.yaml
-    image: temporalio/auto-setup:${TEMPORAL_VERSION}
+    image: temporalio/auto-setup:${TEMPORAL_VERSION} 
     networks:
       - temporal-network
     ports:
