@@ -55,6 +55,14 @@ class GatewayConfig(
     "te", "trailers", "transfer-encoding", "upgrade", "host", "content-length"
   )
 
+  // CORS headers from backend responses are stripped so the gateway's CorsFilter
+  // is the single authority — this prevents duplicate Access-Control-Allow-* headers.
+  private val CORS_HEADERS = setOf(
+    "access-control-allow-origin", "access-control-allow-methods",
+    "access-control-allow-headers", "access-control-allow-credentials",
+    "access-control-expose-headers", "access-control-max-age", "vary"
+  )
+
   @Bean
   fun apiServerRoute(): RouterFunction<ServerResponse> =
     route("api-server")
@@ -113,7 +121,7 @@ class GatewayConfig(
     // Build the response
     val responseBuilder = ServerResponse.status(proxyResponse.statusCode())
     proxyResponse.headers().map().forEach { (name, values) ->
-      if (name.lowercase() !in HOP_BY_HOP_HEADERS) {
+      if (name.lowercase() !in HOP_BY_HOP_HEADERS && name.lowercase() !in CORS_HEADERS) {
         values.forEach { value -> responseBuilder.header(name, value) }
       }
     }

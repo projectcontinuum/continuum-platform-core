@@ -3,6 +3,8 @@ package org.projectcontinuum.core.worker.starter.activity
 import org.projectcontinuum.core.commons.activity.IContinuumNodeActivity
 import org.projectcontinuum.core.commons.annotation.ContinuumNode
 import org.projectcontinuum.core.commons.constant.TaskQueues
+import org.projectcontinuum.core.commons.context.ContinuumOwnerContext
+import org.projectcontinuum.core.commons.context.CredentialContext
 import org.projectcontinuum.core.commons.exception.NodeRuntimeException
 import org.projectcontinuum.core.commons.model.ContinuumWorkflowModel
 import org.projectcontinuum.core.commons.model.PortData
@@ -16,6 +18,7 @@ import org.projectcontinuum.core.commons.protocol.progress.StageStatus
 import org.projectcontinuum.core.commons.utils.NodeInputReader
 import org.projectcontinuum.core.commons.utils.NodeOutputWriter
 import org.projectcontinuum.core.commons.workflow.IContinuumWorkflow
+import org.projectcontinuum.core.worker.starter.resolver.CredentialResolver
 import io.temporal.activity.Activity
 import io.temporal.activity.ActivityExecutionContext
 import io.temporal.spring.boot.ActivityImpl
@@ -83,6 +86,7 @@ import kotlin.system.measureTimeMillis
 class ContinuumNodeActivity(
   private val applicationContext: ApplicationContext,
   private val s3TransferManager: S3TransferManager,
+  private val credentialResolver: CredentialResolver,
   @param:Value("\${continuum.core.worker.storage.bucket-name}")
   private val cacheBucketName: String,
   @param:Value("\${continuum.core.worker.storage.bucket-base-path}")
@@ -238,12 +242,28 @@ class ContinuumNodeActivity(
 
     executionStartTime.set(System.currentTimeMillis())
 
-    createProcessNode(nodeModel).run(
-      node = node,
-      inputs = nodeInputs,
-      nodeOutputWriter = nodeOutputWriter,
-      nodeProgressCallback = progressCallback
-    )
+    // Resolve credentials from UI Schema before node execution.
+    // Scans propertiesUISchema for fields with options.format == "credentials",
+    // fetches the actual credential data from the Credentials Server,
+    // and makes it available to the node via CredentialContext.
+    val ownerId = ContinuumOwnerContext.get()
+    val credentials = if (ownerId != null) {
+      credentialResolver.resolve(node.data.properties, node.data.propertiesUISchema, ownerId)
+    } else {
+      emptyMap()
+    }
+
+    CredentialContext.set(credentials)
+    try {
+      createProcessNode(nodeModel).run(
+        node = node,
+        inputs = nodeInputs,
+        nodeOutputWriter = nodeOutputWriter,
+        nodeProgressCallback = progressCallback
+      )
+    } finally {
+      CredentialContext.clear()
+    }
 
     progressCallback.report(NodeProgress(100))
 
