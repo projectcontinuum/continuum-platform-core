@@ -2,13 +2,13 @@ package org.projectcontinuum.core.api.server.entity.jpa
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.node.JsonNodeFactory
-import io.hypersistence.utils.hibernate.type.json.JsonType
 import jakarta.persistence.Column
 import jakarta.persistence.Convert
 import jakarta.persistence.Entity
 import jakarta.persistence.Id
 import jakarta.persistence.Table
-import org.hibernate.annotations.Type
+import org.hibernate.annotations.JdbcTypeCode
+import org.hibernate.type.SqlTypes
 import java.net.URI
 import java.time.Instant
 import java.util.UUID
@@ -36,7 +36,7 @@ class WorkflowRunEntity(
     @Column(name = "status", nullable = false)
     var status: String = "PENDING",
 
-    @Type(JsonType::class)
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "data", columnDefinition = "jsonb", nullable = false)
     var data: JsonNode = JsonNodeFactory.instance.objectNode(),
 

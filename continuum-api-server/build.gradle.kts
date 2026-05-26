@@ -1,10 +1,10 @@
 plugins {
-    kotlin("jvm") version "2.1.0"
-    kotlin("plugin.spring") version "1.9.25"
-    kotlin("plugin.jpa") version "2.1.0"
-    id("org.springframework.boot") version "3.4.0"
-    id("io.spring.dependency-management") version "1.1.6"
-    id("com.google.cloud.tools.jib") version "3.4.1"
+    kotlin("jvm") version "2.2.0"
+    kotlin("plugin.spring") version "2.2.0"
+    kotlin("plugin.jpa") version "2.2.0"
+    id("org.springframework.boot") version "4.0.6"
+    id("io.spring.dependency-management") version "1.1.7"
+    id("com.google.cloud.tools.jib") version "3.4.4"
 }
 
 group = "org.projectcontinuum.core"
@@ -13,7 +13,7 @@ version = property("platformVersion").toString()
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
+        languageVersion = JavaLanguageVersion.of(25)
     }
 }
 
@@ -33,7 +33,7 @@ dependencies {
     implementation(project(":continuum-commons"))
 
     // Swagger-UI Dependencies
-    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0")
+    implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6")
 
     // Temporal Dependencies
     implementation("io.temporal:temporal-sdk")
@@ -48,8 +48,7 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
     implementation("org.postgresql:postgresql")
 
-    // Hibernate JSONB support
-    implementation("io.hypersistence:hypersistence-utils-hibernate-63:3.9.0")
+    // Hibernate JSONB support (native Hibernate 7 @JdbcTypeCode used instead)
 
     // RSQL query support
     implementation("io.github.perplexhub:rsql-jpa-spring-boot-starter:6.0.27")
@@ -64,6 +63,7 @@ dependencies {
 
     // Test dependencies
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.3.1")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
@@ -71,7 +71,7 @@ dependencies {
 
 dependencyManagement {
     imports {
-        mavenBom("org.springframework.cloud:spring-cloud-dependencies:2024.0.0")
+        mavenBom("org.springframework.cloud:spring-cloud-dependencies:2025.0.0")
         mavenBom("io.temporal:temporal-bom:1.28.0")
         mavenBom("software.amazon.awssdk:bom:2.30.7")
     }
@@ -80,7 +80,12 @@ dependencyManagement {
 kotlin {
     compilerOptions {
         freeCompilerArgs.addAll("-Xjsr305=strict")
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_24)
     }
+}
+
+tasks.withType<JavaCompile> {
+    targetCompatibility = "24"
 }
 
 tasks.withType<Test> {
@@ -89,7 +94,7 @@ tasks.withType<Test> {
 
 jib {
     from {
-        image = "eclipse-temurin:21-jre"
+        image = "eclipse-temurin:25-jre"
     }
 
     to {
