@@ -1,9 +1,9 @@
 plugins {
   kotlin("jvm") version "2.2.0"
   kotlin("plugin.spring") version "2.2.0"
-  id("org.springframework.boot") version "3.4.0"
-  id("io.spring.dependency-management") version "1.1.6"
-  id("com.google.cloud.tools.jib") version "3.4.1"
+  id("org.springframework.boot") version "4.0.6"
+  id("io.spring.dependency-management") version "1.1.7"
+  id("com.google.cloud.tools.jib") version "3.4.4"
 }
 
 group = "org.projectcontinuum.core"
@@ -12,7 +12,7 @@ version = property("platformVersion").toString()
 
 java {
   toolchain {
-    languageVersion = JavaLanguageVersion.of(21)
+    languageVersion = JavaLanguageVersion.of(25)
   }
 }
 
@@ -46,14 +46,19 @@ dependencies {
 
 dependencyManagement {
   imports {
-    mavenBom("org.springframework.cloud:spring-cloud-dependencies:2024.0.1")
+    mavenBom("org.springframework.cloud:spring-cloud-dependencies:2025.0.0")
   }
 }
 
 kotlin {
   compilerOptions {
     freeCompilerArgs.addAll("-Xjsr305=strict")
+    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_24)
   }
+}
+
+tasks.withType<JavaCompile> {
+  targetCompatibility = "24"
 }
 
 tasks.withType<Test> {
@@ -62,7 +67,7 @@ tasks.withType<Test> {
 
 jib {
   from {
-    image = "eclipse-temurin:21-jre"
+    image = "eclipse-temurin:25-jre"
   }
 
   to {
