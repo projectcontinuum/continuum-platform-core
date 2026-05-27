@@ -33,7 +33,7 @@ dependencies {
   implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6")
 
   // Kubernetes client
-  implementation("io.fabric8:kubernetes-client:7.1.0")
+  implementation("io.fabric8:kubernetes-client:7.7.0")
 
   // Template engine for K8s manifests
   implementation("org.freemarker:freemarker:2.3.34")
@@ -50,8 +50,8 @@ dependencies {
   testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
   testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
   testImplementation("org.mockito.kotlin:mockito-kotlin:5.3.1")
-  testImplementation("io.fabric8:kubernetes-server-mock:7.1.0")
-  testImplementation("io.fabric8:mockwebserver:7.1.0")
+  testImplementation("io.fabric8:kubernetes-server-mock:7.7.0")
+  testImplementation("io.fabric8:mockwebserver:7.7.0")
   testImplementation("com.h2database:h2")
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
