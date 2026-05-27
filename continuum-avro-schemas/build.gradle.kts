@@ -12,6 +12,9 @@ version = property("platformVersion").toString()
 java {
     withJavadocJar()
     withSourcesJar()
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
 }
 
 repositories {
