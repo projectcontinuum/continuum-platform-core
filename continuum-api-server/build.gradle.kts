@@ -13,7 +13,7 @@ version = property("platformVersion").toString()
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(25)
+        languageVersion = JavaLanguageVersion.of(21)
     }
 }
 
@@ -80,12 +80,7 @@ dependencyManagement {
 kotlin {
     compilerOptions {
         freeCompilerArgs.addAll("-Xjsr305=strict")
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_24)
     }
-}
-
-tasks.withType<JavaCompile> {
-    targetCompatibility = "24"
 }
 
 tasks.withType<Test> {
@@ -94,7 +89,7 @@ tasks.withType<Test> {
 
 jib {
     from {
-        image = "eclipse-temurin:25-jre"
+        image = "eclipse-temurin:21-jre"
     }
 
     to {

@@ -10,8 +10,6 @@ description = "Continuum Avro Schemas — shared Kafka message schemas for workf
 version = property("platformVersion").toString()
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
     withJavadocJar()
     withSourcesJar()
 }
