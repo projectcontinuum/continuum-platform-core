@@ -31,8 +31,8 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
 
     // Spring Cloud stream dependencies
-    implementation("io.confluent:kafka-avro-serializer:7.6.1")
-    implementation("io.confluent:kafka-schema-registry-client:7.6.1")
+    implementation("io.confluent:kafka-avro-serializer:8.2.1")
+    implementation("io.confluent:kafka-schema-registry-client:8.2.1")
     implementation("org.springframework.cloud:spring-cloud-starter-stream-kafka")
 
     // Project dependencies
@@ -46,7 +46,8 @@ dependencies {
     implementation(project(":continuum-avro-schemas"))
 
     // Jackson dependencies
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.18.2")
+    implementation("org.springframework.boot:spring-boot-starter-json")
+    implementation("tools.jackson.module:jackson-module-kotlin")
 
     // MQTT dependencies
     implementation("org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5")
@@ -63,7 +64,7 @@ dependencies {
 
 dependencyManagement {
     imports {
-        mavenBom("org.springframework.cloud:spring-cloud-dependencies:2025.0.0")
+        mavenBom("org.springframework.cloud:spring-cloud-dependencies:2025.1.1")
         mavenBom("io.temporal:temporal-bom:1.28.0")
         mavenBom("software.amazon.awssdk:bom:2.30.7")
     }

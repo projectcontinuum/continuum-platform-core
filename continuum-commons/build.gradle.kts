@@ -27,7 +27,7 @@ dependencies {
     implementation("jakarta.annotation:jakarta.annotation-api:2.1.1")
 
     // Jackson dependencies
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.18.2")
+    implementation("tools.jackson.module:jackson-module-kotlin")
 
     // Parquet writer — exposed via NodeOutputWriter/NodeInputReader public API
     implementation("org.apache.avro:avro:1.12.1")
