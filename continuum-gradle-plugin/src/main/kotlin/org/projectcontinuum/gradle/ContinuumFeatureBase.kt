@@ -209,7 +209,9 @@ object ContinuumFeatureBase {
         project.extensions.configure<JReleaserExtension> {
             signing {
                 active.set(Active.ALWAYS)
-                armored.set(true)
+                pgp {
+                    armored.set(true)
+                }
             }
             deploy {
                 maven {

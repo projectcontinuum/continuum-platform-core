@@ -80,7 +80,9 @@ publishing {
 jreleaser {
     signing {
         active.set(org.jreleaser.model.Active.ALWAYS)
-        armored.set(true)
+        pgp {
+            armored.set(true)
+        }
     }
     deploy {
         maven {

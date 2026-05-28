@@ -73,6 +73,7 @@ class KnimeHelper {
       }
     }
 
+    @Suppress("UNCHECKED_CAST")
     fun continuumTableToKnimeContainerInputTable(
       reader: NodeInputReader
     ): Map<String, Any> {
@@ -99,6 +100,7 @@ class KnimeHelper {
       return knimeTable
     }
 
+    @Suppress("UNCHECKED_CAST")
     fun knimeContainerOutputTableToPortOutput(
       outputFile: File,
       outputPortWriter: NodeOutputWriter.OutputPortWriter

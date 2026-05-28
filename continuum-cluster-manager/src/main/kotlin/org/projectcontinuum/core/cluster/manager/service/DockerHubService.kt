@@ -90,8 +90,8 @@ class DockerHubService(
   @JsonIgnoreProperties(ignoreUnknown = true)
   private data class DockerHubTagResult(
     val name: String,
-    @JsonProperty("last_updated") val lastUpdated: String?,
-    @JsonProperty("full_size") val fullSize: Long?
+    @param:JsonProperty("last_updated") val lastUpdated: String?,
+    @param:JsonProperty("full_size") val fullSize: Long?
   )
 
   private data class CachedResult(

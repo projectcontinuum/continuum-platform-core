@@ -1,6 +1,6 @@
 plugins {
-    kotlin("jvm") version "2.2.0"
-    kotlin("plugin.spring") version "2.2.0"
+    kotlin("jvm")
+    kotlin("plugin.spring")
     `java-library`
     id("io.spring.dependency-management") version "1.1.7"
     `maven-publish`
@@ -143,7 +143,9 @@ publishing {
 jreleaser {
     signing {
         active.set(org.jreleaser.model.Active.ALWAYS)
-        armored.set(true)
+        pgp {
+            armored.set(true)
+        }
     }
     deploy {
         maven {
