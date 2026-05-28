@@ -10,7 +10,7 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.projectcontinuum.core.api.server.entity.RegisteredNodeEntity
 import org.projectcontinuum.core.api.server.model.NodeExplorerItemType
-import org.projectcontinuum.core.api.server.repository.RegisteredNodeRepository
+import org.projectcontinuum.core.api.server.repository.jdbc.RegisteredNodeRepository
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertNull

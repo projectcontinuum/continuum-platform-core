@@ -8,7 +8,7 @@ import org.springframework.data.jdbc.core.convert.JdbcCustomConversions
 import org.springframework.data.jdbc.repository.config.EnableJdbcRepositories
 
 @Configuration
-@EnableJdbcRepositories(basePackages = ["org.projectcontinuum.core.api.server.repository"])
+@EnableJdbcRepositories(basePackages = ["org.projectcontinuum.core.api.server.repository.jdbc"])
 class JdbcConfig {
 
   @Bean
