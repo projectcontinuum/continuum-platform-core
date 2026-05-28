@@ -10,8 +10,8 @@ import org.projectcontinuum.core.commons.model.ExecutionStatus
 import org.projectcontinuum.core.commons.model.PortData
 import org.projectcontinuum.core.commons.utils.ValidationHelper.Companion.validateJsonWithSchema
 import org.projectcontinuum.core.commons.workflow.IContinuumWorkflow
-import com.fasterxml.jackson.core.type.TypeReference
-import com.fasterxml.jackson.databind.ObjectMapper
+import tools.jackson.core.type.TypeReference
+import tools.jackson.databind.ObjectMapper
 import com.google.protobuf.ByteString
 import io.temporal.api.common.v1.WorkflowExecution
 import io.temporal.api.enums.v1.EventType

@@ -1,7 +1,7 @@
 package org.projectcontinuum.core.api.server.service
 
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.kotlinModule
+import tools.jackson.databind.json.JsonMapper
+import tools.jackson.module.kotlin.KotlinModule
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
@@ -20,12 +20,12 @@ class NodeExplorerServiceTest {
 
   private lateinit var repository: RegisteredNodeRepository
   private lateinit var service: NodeExplorerService
-  private val objectMapper = ObjectMapper().apply { registerModule(kotlinModule()) }
+  private val objectMapper = JsonMapper.builder().addModule(KotlinModule.Builder().build()).build()
 
   @BeforeEach
   fun setUp() {
     repository = mock()
-    service = NodeExplorerService(repository)
+    service = NodeExplorerService(repository, objectMapper)
   }
 
   // --- Helper to build test entities ---

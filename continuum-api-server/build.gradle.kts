@@ -25,9 +25,8 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-json")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("org.springframework.cloud:spring-cloud-starter-stream-kafka")
-    implementation("org.springframework.cloud:spring-cloud-stream-binder-kafka-reactive")
 
     // Project dependencies
     implementation(project(":continuum-commons"))
@@ -45,7 +44,7 @@ dependencies {
     // PostgreSQL Dependencies
     implementation("org.springframework.boot:spring-boot-starter-data-jdbc")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
+    implementation("tools.jackson.module:jackson-module-kotlin")
     implementation("org.postgresql:postgresql")
 
     // Hibernate JSONB support (native Hibernate 7 @JdbcTypeCode used instead)
@@ -71,7 +70,6 @@ dependencies {
 
 dependencyManagement {
     imports {
-        mavenBom("org.springframework.cloud:spring-cloud-dependencies:2025.0.0")
         mavenBom("io.temporal:temporal-bom:1.28.0")
         mavenBom("software.amazon.awssdk:bom:2.30.7")
     }
