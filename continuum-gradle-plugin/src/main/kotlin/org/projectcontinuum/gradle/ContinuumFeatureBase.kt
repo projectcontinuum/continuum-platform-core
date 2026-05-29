@@ -26,7 +26,7 @@ object ContinuumFeatureBase {
     const val DEFAULT_CONTINUUM_VERSION = "0.0.6"
     const val DEFAULT_CONTINUUM_GROUP = "org.projectcontinuum.core"
     const val DEFAULT_SPRING_BOOT_VERSION = "4.0.6"
-    const val DEFAULT_SPRING_CLOUD_VERSION = "2025.0.0"
+    const val DEFAULT_SPRING_CLOUD_VERSION = "2025.1.1"
     const val DEFAULT_TEMPORAL_VERSION = "1.28.0"
     const val DEFAULT_AWS_SDK_VERSION = "2.30.7"
     const val DEFAULT_JACKSON_VERSION = "3.1.2"

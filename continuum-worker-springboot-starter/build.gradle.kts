@@ -73,7 +73,7 @@ dependencies {
 dependencyManagement {
     imports {
         mavenBom("org.springframework.boot:spring-boot-dependencies:4.0.6")
-        mavenBom("org.springframework.cloud:spring-cloud-dependencies:2025.0.0")
+        mavenBom("org.springframework.cloud:spring-cloud-dependencies:2025.1.1")
         mavenBom("io.temporal:temporal-bom:1.28.0")
         mavenBom("software.amazon.awssdk:bom:2.30.7")
     }
