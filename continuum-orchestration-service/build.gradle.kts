@@ -40,7 +40,9 @@ dependencies {
     implementation(project(":continuum-avro-schemas"))
 
     // Jackson dependencies
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.18.2")
+    implementation("org.springframework.boot:spring-boot-starter-json")
+    implementation("tools.jackson.module:jackson-module-kotlin")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin")  // TODO: Remove once Temporal supports the latest version of jackson-module-kotlin
 
     // Temporal dependencies
     implementation("io.temporal:temporal-sdk")
@@ -59,8 +61,8 @@ dependencies {
 
 dependencyManagement {
     imports {
-        mavenBom("org.springframework.cloud:spring-cloud-dependencies:2024.0.0")
-        mavenBom("io.temporal:temporal-bom:1.28.0")
+        mavenBom("org.springframework.cloud:spring-cloud-dependencies:2025.1.1")
+        mavenBom("io.temporal:temporal-bom:1.35.0")
     }
 }
 
