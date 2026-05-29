@@ -31,7 +31,7 @@ dependencies {
   implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
 
   // Spring Cloud Gateway Server MVC (servlet-based reverse proxy)
-  implementation("org.springframework.cloud:spring-cloud-gateway-server-mvc")
+  implementation("org.springframework.cloud:spring-cloud-starter-gateway-server-webmvc")
 
   // Database (read-only access to workbench_instances for endpoint resolution)
   implementation("org.springframework.boot:spring-boot-starter-data-jdbc")
@@ -46,7 +46,7 @@ dependencies {
 
 dependencyManagement {
   imports {
-    mavenBom("org.springframework.cloud:spring-cloud-dependencies:2025.0.0")
+    mavenBom("org.springframework.cloud:spring-cloud-dependencies:2025.1.1")
   }
 }
 
