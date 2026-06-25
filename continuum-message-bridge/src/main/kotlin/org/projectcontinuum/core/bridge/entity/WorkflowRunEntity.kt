@@ -1,5 +1,6 @@
 package org.projectcontinuum.core.bridge.entity
 
+import org.projectcontinuum.core.bridge.model.WorkflowRunData
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.JsonNodeFactory
 import org.springframework.data.annotation.Id
@@ -21,7 +22,7 @@ data class WorkflowRunEntity(
   var status: String = "PENDING",
 
   @Column("data")
-  var data: JsonNode = JsonNodeFactory.instance.objectNode(),
+  var data: WorkflowRunData,
 
   @Column("created_at")
   val createdAt: Instant = Instant.now(),

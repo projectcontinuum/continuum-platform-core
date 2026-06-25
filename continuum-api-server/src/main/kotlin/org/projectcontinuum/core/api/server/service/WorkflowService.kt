@@ -22,6 +22,7 @@ import io.temporal.client.WorkflowClient
 import io.temporal.client.WorkflowException
 import io.temporal.client.WorkflowOptions
 import io.temporal.common.SearchAttributes
+import org.projectcontinuum.core.api.server.model.WorkflowRunData
 import org.projectcontinuum.core.commons.context.ContinuumOwnerContext
 import org.slf4j.LoggerFactory
 import org.springframework.scheduling.annotation.EnableScheduling
@@ -80,11 +81,9 @@ class WorkflowService(
         workflowUri = URI.create(continuumWorkflowModel.name),
         progressPercentage = 0,
         status = "PENDING",
-        data = objectMapper.valueToTree(
-          mapOf(
-            "workflowSnapshot" to continuumWorkflowModel,
-            "nodeToOutputMap" to emptyMap<String, Any>()
-          )
+        data = WorkflowRunData(
+          workflowSnapshot = continuumWorkflowModel,
+          nodeToOutputMap = emptyMap()
         )
       )
     )
