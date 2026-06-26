@@ -1,0 +1,10 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="ApiServer" type="SpringBootApplicationConfigurationType" factoryName="Spring Boot" folderName="Core">
+    <module name="continuum-platform-core.continuum-api-server.main" />
+    <option name="SPRING_BOOT_MAIN_CLASS" value="org.projectcontinuum.core.api.server.Main" />
+    <option name="VM_PARAMETERS" value="-Dserver.port=8081" />
+    <method v="2">
+      <option name="Make" enabled="true" />
+    </method>
+  </configuration>
+</component>
