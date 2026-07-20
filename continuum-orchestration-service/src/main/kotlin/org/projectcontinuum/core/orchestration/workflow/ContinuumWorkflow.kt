@@ -18,7 +18,6 @@ import io.temporal.workflow.Workflow
 import io.temporal.workflow.unsafe.WorkflowUnsafe
 import org.projectcontinuum.core.commons.activity.IInitializeActivity
 import org.projectcontinuum.core.commons.model.ContinuumWorkflowModel
-import org.projectcontinuum.core.commons.model.ContinuumWorkflowModel.NodeStatus
 import org.projectcontinuum.core.commons.model.ExecutionStatus
 import org.projectcontinuum.core.commons.model.PortData
 import org.projectcontinuum.core.commons.model.WorkflowSnapshot
@@ -388,7 +387,7 @@ class ContinuumWorkflow : IContinuumWorkflow {
       } ?: true
 
       if(!allInputPortsConnected) {
-        node.data.status = NodeStatus.SKIPPED
+        node.data.status = ContinuumWorkflowModel.NodeStatus.SKIPPED
       }
 
       LOGGER.debug(
