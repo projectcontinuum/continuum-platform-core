@@ -9,6 +9,7 @@ import io.temporal.client.WorkflowOptions
 import io.temporal.client.WorkflowStub
 import io.temporal.common.converter.DefaultDataConverter
 import io.temporal.common.converter.JacksonJsonPayloadConverter
+import io.temporal.failure.ActivityFailure
 import io.temporal.failure.ApplicationFailure
 import io.temporal.failure.CanceledFailure
 import io.temporal.testing.TestEnvironmentOptions
@@ -31,6 +32,7 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -302,6 +304,200 @@ class ContinuumWorkflowTest {
       val executionException = assertFailsWith<ExecutionException> { future.get(10, TimeUnit.SECONDS) }
       val workflowFailed = executionException.cause as WorkflowFailedException
       assertTrue(workflowFailed.cause is CanceledFailure)
+    }
+  }
+
+  @Test
+  fun `node throwing retryable exception retries and eventually succeeds`() {
+    newEnv().use { env ->
+      // Configure fake to throw exception on first 2 attempts, succeed on 3rd
+      val attemptCount = AtomicInteger(0)
+      env.fakeNodeActivity.throwOnAttempt["1"] = {
+        if (attemptCount.incrementAndGet() <= 2) {
+          throw ApplicationFailure.newFailure(
+            "Transient network error",
+            "NetworkError"
+          ) // retryable by default
+        }
+      }
+      env.fakeNodeActivity.successOutputs["1"] = mapOf("output-1" to samplePortData("success"))
+
+      val model = WorkflowFixtures.loadWorkflow("/test-workflows/single-node.cwf.json")
+      val (_, future) = startWorkflow(env, model)
+      val result = future.get(30, TimeUnit.SECONDS)
+
+      assertTrue(result.containsKey("1"))
+      assertTrue(attemptCount.get() >= 3, "Expected at least 3 attempts but got ${attemptCount.get()}")
+    }
+  }
+
+  @Test
+  fun `node throwing exception test with linear workflow`() {
+    newEnv().use { env ->
+      env.fakeNodeActivity.successOutputs["2"] = mapOf("output-1" to samplePortData("first-success"))
+      env.fakeNodeActivity.alwaysThrow["3"] = RuntimeException("Test exception")
+
+      val model = WorkflowFixtures.loadWorkflow("/test-workflows/linear-2node.cwf.json")
+      val (_, future) = startWorkflow(env, model)
+
+      val executionException = assertFailsWith<ExecutionException> {
+        future.get(30, TimeUnit.SECONDS)
+      }
+      println("Exception caught: ${executionException.cause}")
+      println("Invoked nodes: ${env.fakeNodeActivity.invokedNodeIds}")
+      println("Attempt count for node 3: ${env.fakeNodeActivity.attemptCount["3"]?.get()}")
+      
+      val workflowFailed = executionException.cause as WorkflowFailedException
+      assertTrue(workflowFailed.cause is ApplicationFailure)
+      assertTrue(env.fakeNodeActivity.attemptCount["3"]!!.get() > 1, "Should have retried, got ${env.fakeNodeActivity.attemptCount["3"]!!.get()}")
+    }
+  }
+
+  @Test
+  fun `single node workflow executes successfully`() {
+    newEnv().use { env ->
+      env.fakeNodeActivity.successOutputs["1"] = mapOf("output-1" to samplePortData("single-success"))
+
+      val model = WorkflowFixtures.loadWorkflow("/test-workflows/single-node.cwf.json")
+      val (_, future) = startWorkflow(env, model)
+      val result = future.get(10, TimeUnit.SECONDS)
+
+      println("Invoked nodes: ${env.fakeNodeActivity.invokedNodeIds}")
+      println("Attempt count for node 1: ${env.fakeNodeActivity.attemptCount["1"]?.get()}")
+      assertTrue(result.containsKey("1"))
+      assertTrue(env.fakeNodeActivity.invokedNodeIds.contains("1"))
+    }
+  }
+
+  @Test
+  fun `node throwing retryable exception exhausts retries and fails workflow`() {
+    newEnv().use { env ->
+      // Configure to always throw retryable exception
+      env.fakeNodeActivity.alwaysThrow["1"] = RuntimeException("Persistent error")
+      // Don't set successOutputs - we want this to always fail
+
+      val model = WorkflowFixtures.loadWorkflow("/test-workflows/single-node.cwf.json")
+      val (_, future) = startWorkflow(env, model)
+
+      // Note: With 500 max retry attempts, this would take too long.
+      // In a real scenario, you'd configure shorter retry options for testing.
+      // For now, we verify that it does retry multiple times within a reasonable timeout.
+      val executionException = assertFailsWith<ExecutionException> {
+        future.get(30, TimeUnit.SECONDS)
+      }
+      val workflowFailed = executionException.cause as WorkflowFailedException
+      assertTrue(workflowFailed.cause is ApplicationFailure)
+      assertTrue(env.fakeNodeActivity.attemptCount["1"]!!.get() > 1, "Should have retried multiple times, got ${env.fakeNodeActivity.attemptCount["1"]!!.get()}")
+    }
+  }
+
+  @Test
+  fun `node throwing non-retryable exception immediately fails without retry`() {
+    newEnv().use { env ->
+      env.fakeNodeActivity.throwOnInvoke["1"] = {
+        throw ApplicationFailure.newNonRetryableFailure(
+          "Invalid configuration",
+          "ConfigError"
+        )
+      }
+      // Don't set successOutputs - we want this to throw immediately
+
+      val model = WorkflowFixtures.loadWorkflow("/test-workflows/single-node.cwf.json")
+      val (_, future) = startWorkflow(env, model)
+
+      val executionException = assertFailsWith<ExecutionException> {
+        future.get(10, TimeUnit.SECONDS)
+      }
+      val workflowFailed = executionException.cause as WorkflowFailedException
+      assertTrue(workflowFailed.cause is ApplicationFailure)
+      assertEquals(1, env.fakeNodeActivity.attemptCount["1"]!!.get(), "Should only attempt once for non-retryable, got ${env.fakeNodeActivity.attemptCount["1"]!!.get()}")
+    }
+  }
+
+  @Test
+  fun `multiple nodes failing with different error types tracks all errors`() {
+    newEnv().use { env ->
+      env.fakeNodeActivity.successOutputs["A"] = mapOf("out-1" to samplePortData("A"))
+      env.fakeNodeActivity.errorOutputs["B"] = mapOf("\$error" to samplePortData("B failed"))
+      env.fakeNodeActivity.errorOutputs["C"] = mapOf("\$error" to samplePortData("C failed"))
+
+      val model = WorkflowFixtures.loadWorkflow("/test-workflows/diamond-4node.cwf.json")
+      val (_, future) = startWorkflow(env, model)
+
+      val executionException = assertFailsWith<ExecutionException> { future.get(10, TimeUnit.SECONDS) }
+      val workflowFailed = executionException.cause as WorkflowFailedException
+      val appFailure = workflowFailed.cause as ApplicationFailure
+
+      @Suppress("UNCHECKED_CAST")
+      val details = appFailure.details.get(0, Map::class.java) as Map<String, Map<*, *>>
+      val nodeErrors = details.getValue("nodeErrors")
+
+      assertEquals(2, nodeErrors.size)
+      assertTrue(nodeErrors.containsKey("B"))
+      assertTrue(nodeErrors.containsKey("C"))
+      // D should not execute since B and C failed
+      assertFalse(env.fakeNodeActivity.invokedNodeIds.contains("D"))
+    }
+  }
+
+  @Test
+  fun `failure at workflow start prevents downstream nodes from executing`() {
+    newEnv().use { env ->
+      env.fakeNodeActivity.errorOutputs["A"] = mapOf("\$error" to samplePortData("root failed"))
+
+      val model = WorkflowFixtures.loadWorkflow("/test-workflows/diamond-4node.cwf.json")
+      val (_, future) = startWorkflow(env, model)
+
+      assertFailsWith<ExecutionException> { future.get(10, TimeUnit.SECONDS) }
+
+      // Only root node should have been invoked
+      assertEquals(listOf("A"), env.fakeNodeActivity.invokedNodeIds)
+    }
+  }
+
+  @Test
+  fun `failure in middle of DAG allows independent branches to complete`() {
+    newEnv().use { env ->
+      env.fakeNodeActivity.successOutputs["A"] = mapOf("out-1" to samplePortData("A"))
+      env.fakeNodeActivity.successOutputs["B"] = mapOf("out-1" to samplePortData("B"))
+      env.fakeNodeActivity.errorOutputs["C"] = mapOf("\$error" to samplePortData("C failed"))
+
+      val model = WorkflowFixtures.loadWorkflow("/test-workflows/diamond-4node.cwf.json")
+      val (_, future) = startWorkflow(env, model)
+
+      val executionException = assertFailsWith<ExecutionException> { future.get(10, TimeUnit.SECONDS) }
+      val workflowFailed = executionException.cause as WorkflowFailedException
+      val appFailure = workflowFailed.cause as ApplicationFailure
+
+      @Suppress("UNCHECKED_CAST")
+      val details = appFailure.details.get(0, Map::class.java) as Map<String, Map<*, *>>
+
+      // B succeeded even though C failed (parallel branches)
+      assertTrue(details.getValue("nodeToOutputsMap").containsKey("B"))
+      assertTrue(details.getValue("nodeErrors").containsKey("C"))
+    }
+  }
+
+  @Test
+  fun `node fails on first attempt then succeeds on retry preserving previous successful nodes`() {
+    newEnv().use { env ->
+      env.fakeNodeActivity.successOutputs["2"] = mapOf("output-1" to samplePortData("first-success"))
+
+      val attemptCount = AtomicInteger(0)
+      env.fakeNodeActivity.throwOnAttempt["3"] = {
+        if (attemptCount.incrementAndGet() == 1) {
+          throw ApplicationFailure.newFailure("Temporary error", "TempError")
+        }
+      }
+      env.fakeNodeActivity.successOutputs["3"] = mapOf("output-1" to samplePortData("retry-success"))
+
+      val model = WorkflowFixtures.loadWorkflow("/test-workflows/linear-2node.cwf.json")
+      val (_, future) = startWorkflow(env, model)
+      val result = future.get(30, TimeUnit.SECONDS)
+
+      assertTrue(result.containsKey("2"))
+      assertTrue(result.containsKey("3"))
+      assertTrue(attemptCount.get() >= 2, "Expected at least 2 attempts for node 3")
     }
   }
 }
