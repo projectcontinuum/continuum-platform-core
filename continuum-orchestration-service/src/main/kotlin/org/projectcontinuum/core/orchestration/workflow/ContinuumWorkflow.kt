@@ -73,6 +73,13 @@ class ContinuumWorkflow : IContinuumWorkflow {
   /** The currently executing workflow model (for status updates) */
   private var currentRunningWorkflow: ContinuumWorkflowModel? = null
 
+  /**
+   * Once set, overrides the status argument to every subsequent [sendUpdateEvent] call.
+   * Set by [notifyCancelling]/[notifyTerminating] when a stop is requested, and superseded
+   * by the real final status once the stop actually completes (e.g. CANCELLED).
+   */
+  private var terminalStatus: String? = null
+
   private var nodeIdToActivityMap: Map<String, IContinuumNodeActivity> = emptyMap()
 
   /**
@@ -162,9 +169,23 @@ class ContinuumWorkflow : IContinuumWorkflow {
         IContinuumWorkflow.WORKFLOW_STATUS
           .valueSet(ExecutionStatus.WORKFLOW_EXECUTION_CANCELED.value)
       )
+      terminalStatus = "CANCELLED"
       sendUpdateEvent("CANCELLED")
       throw e
     } catch (e: ActivityFailure) {
+      if (e.cause is CanceledFailure) {
+        // The activity was cancelled as part of workflow cancellation/termination
+        // propagating down to it, not an actual node failure.
+        LOGGER.warn("Workflow was cancelled or terminated (activity cancelled)", e)
+        markBusyNodesAs(ContinuumWorkflowModel.NodeStatus.CANCELLED)
+        Workflow.upsertTypedSearchAttributes(
+          IContinuumWorkflow.WORKFLOW_STATUS
+            .valueSet(ExecutionStatus.WORKFLOW_EXECUTION_CANCELED.value)
+        )
+        terminalStatus = "CANCELLED"
+        sendUpdateEvent("CANCELLED")
+        throw e
+      }
       // Handle activity-level failures at the workflow level (e.g., initialization failures)
       // Note: Node-level activity failures are now caught and converted to node errors,
       // so this catch block should rarely be reached except for workflow-level activities
@@ -320,9 +341,16 @@ class ContinuumWorkflow : IContinuumWorkflow {
           try {
             nodeIdToActivityMap[node.id]!!.run(node, nodeInputs)
           } catch (e: ActivityFailure) {
+            if (e.cause is CanceledFailure) {
+              // The activity was cancelled as part of workflow cancellation/termination
+              // propagating down to it, not an actual node failure. Rethrow so it surfaces
+              // to start()'s CanceledFailure/ActivityFailure handling instead of being
+              // recorded as a node-level error.
+              throw e
+            }
             // Convert activity-level failure (e.g., retries exhausted, timeout) to node error
             // This allows the workflow to continue executing other independent nodes
-            LOGGER.error("Activity failure for node ${node.id}: ${e.message}", e)
+            LOGGER.error("Activity failure for node ${node.id}: ${e.cause?.message ?: e.message}", e)
             IContinuumNodeActivity.NodeActivityOutput(
               nodeId = node.id,
               outputs = mapOf(
@@ -471,6 +499,9 @@ class ContinuumWorkflow : IContinuumWorkflow {
   private fun sendUpdateEvent(
     status: String = "RUNNING"
   ) {
+    // Once a stop has been signalled, terminalStatus pins every subsequent event to the
+    // latest known stopping/final status, regardless of what the caller passed in.
+    val effectiveStatus = terminalStatus ?: status
     // Check if the Workflow is being replayed - skip publishing during replay
     if (!WorkflowUnsafe.isReplaying()) {
       // Combine successful outputs and error outputs for the event
@@ -484,7 +515,7 @@ class ContinuumWorkflow : IContinuumWorkflow {
         data = WorkflowUpdate(
           executionUUID = Workflow.getInfo().workflowId,
           progressPercentage = calculateProgressPercentage(),
-          status = status,
+          status = effectiveStatus,
           nodeToOutputsMap = nodeToOutputsMapWithErr,
           createdAtTimestampUtc = Workflow.getInfo().runStartedTimestampMillis,
           updatesAtTimestampUtc = Instant.now().toEpochMilli(),
@@ -580,5 +611,41 @@ class ContinuumWorkflow : IContinuumWorkflow {
 
     // Publish updated state to Kafka
     sendUpdateEvent()
+  }
+
+  /**
+   * Signal handler invoked by the API server just before it issues a Temporal
+   * `cancel()` request. Pins all subsequent status updates to the real final
+   * "CANCELLED" status, closing the window where an in-flight `run()` iteration
+   * or node progress signal could otherwise report a stale "RUNNING" status
+   * after cancellation has already been requested.
+   *
+   * @param reason Optional human-readable reason for the cancellation
+   */
+  override fun notifyCancelling(reason: String?) {
+    LOGGER.info("Received cancellation notice. Reason: ${reason ?: "none"}")
+    LOGGER.info("Preparing for cancellation...")
+    terminalStatus = "CANCELLED"
+    sendUpdateEvent("CANCELLED")
+  }
+
+  /**
+   * Signal handler invoked by the API server just before it issues a Temporal
+   * `terminate()` request. Pins all subsequent status updates to the real final
+   * "TERMINATED" status and updates the search attribute directly, since this is
+   * the only workflow code that will ever run on the termination path — Temporal's
+   * `terminate()` gives the workflow no chance to run any code afterward.
+   *
+   * @param reason Optional human-readable reason for the termination
+   */
+  override fun notifyTerminating(reason: String?) {
+    LOGGER.info("Received termination notice. Reason: ${reason ?: "none"}")
+    LOGGER.info("Preparing for termination...")
+    terminalStatus = "TERMINATED"
+    Workflow.upsertTypedSearchAttributes(
+      IContinuumWorkflow.WORKFLOW_STATUS
+        .valueSet(ExecutionStatus.WORKFLOW_EXECUTION_TERMINATED.value)
+    )
+    sendUpdateEvent("TERMINATED")
   }
 }
