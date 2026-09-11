@@ -41,17 +41,18 @@ spec:
             - name: workspace-storage
               mountPath: /workspace
           livenessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: 8080
-            initialDelaySeconds: 30
-            periodSeconds: 10
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
           readinessProbe:
-            httpGet:
-              path: /
+            tcpSocket:
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 5
+            timeoutSeconds: 3
       volumes:
         - name: workspace-storage
           persistentVolumeClaim:
