@@ -28,6 +28,11 @@ spec:
         - name: theia
           image: ${image}
           imagePullPolicy: ${imagePullPolicy}
+          env:
+            - name: NODE_OPTIONS
+              value: "--max-old-space-size=4096 --trace-warnings"
+            - name: NODE_ENV
+              value: "production"
           ports:
             - containerPort: 8080
           resources:
