@@ -57,6 +57,7 @@ class WorkbenchControllerTest {
     resources = ResourceSpec(),
     overlayVariant = null,
     serviceEndpoint = "wb-test-svc.$namespace.svc.cluster.local:8080",
+    ingressUrl = null,
     createdAt = Instant.now(),
     updatedAt = Instant.now()
   )
@@ -225,6 +226,7 @@ class WorkbenchControllerTest {
       ),
       overlayVariant = null,
       serviceEndpoint = "wb-$instanceId-svc.staging.svc.cluster.local:8080",
+      ingressUrl = null,
       createdAt = now,
       updatedAt = now
     )

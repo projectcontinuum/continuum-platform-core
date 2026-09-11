@@ -1,5 +1,6 @@
 package org.projectcontinuum.core.cluster.manager.service
 
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import freemarker.template.Configuration
 import io.fabric8.kubernetes.api.model.HasMetadata
@@ -114,13 +115,15 @@ class WorkbenchService(
       renderAndApply("service.ftl", templateModel, ResourceType.SERVICE, namespace, variant)
       k8sResourceIds.add("service/wb-${instanceId}-svc")
 
-      renderAndApply("ingress.ftl", templateModel, ResourceType.INGRESS, namespace, variant)
+      val ingressYaml = renderAndApply("ingress.ftl", templateModel, ResourceType.INGRESS, namespace, variant)
       k8sResourceIds.add("ingress/wb-${instanceId}-ingress")
+      val ingressUrl = extractIngressHost(ingressYaml)?.let { "https://$it" }
 
       // Only save to DB after all K8s resources are successfully created
       val savedEntity = transactionTemplate.execute {
         val entityToSave = entity.copy(
           status = WorkbenchStatus.RUNNING.name,
+          ingressUrl = ingressUrl,
           k8sResources = objectMapper.writeValueAsString(k8sResourceIds),
           updatedAt = Instant.now()
         )
@@ -346,10 +349,12 @@ class WorkbenchService(
     val variant = entity.overlayVariant
 
     // First, recreate K8s resources
+    var ingressUrl: String? = null
     try {
       renderAndApply("deployment.ftl", templateModel, ResourceType.DEPLOYMENT, entity.namespace, variant)
       renderAndApply("service.ftl", templateModel, ResourceType.SERVICE, entity.namespace, variant)
-      renderAndApply("ingress.ftl", templateModel, ResourceType.INGRESS, entity.namespace, variant)
+      val ingressYaml = renderAndApply("ingress.ftl", templateModel, ResourceType.INGRESS, entity.namespace, variant)
+      ingressUrl = extractIngressHost(ingressYaml)?.let { "https://$it" }
     } catch (ex: Exception) {
       logger.error("Failed to resume K8s resources for workbench ${entity.instanceId}, rolling back", ex)
       logAudit(
@@ -373,6 +378,7 @@ class WorkbenchService(
     val resumedEntity = transactionTemplate.execute {
       val entityToSave = entity.copy(
         status = WorkbenchStatus.RUNNING.name,
+        ingressUrl = ingressUrl,
         updatedAt = Instant.now()
       )
       repository.save(entityToSave)
@@ -430,10 +436,12 @@ class WorkbenchService(
     val variant = updatedEntity.overlayVariant
 
     // First, update K8s resources
+    var ingressUrl: String? = null
     try {
       renderAndApply("deployment.ftl", templateModel, ResourceType.DEPLOYMENT, updatedEntity.namespace, variant)
       renderAndApply("service.ftl", templateModel, ResourceType.SERVICE, updatedEntity.namespace, variant)
-      renderAndApply("ingress.ftl", templateModel, ResourceType.INGRESS, updatedEntity.namespace, variant)
+      val ingressYaml = renderAndApply("ingress.ftl", templateModel, ResourceType.INGRESS, updatedEntity.namespace, variant)
+      ingressUrl = extractIngressHost(ingressYaml)?.let { "https://$it" }
     } catch (ex: Exception) {
       logger.error("Failed to update K8s resources for workbench ${entity.instanceId}, rolling back", ex)
       logAudit(
@@ -459,7 +467,7 @@ class WorkbenchService(
 
     // Only save to DB after K8s resources are successfully updated
     val savedEntity = transactionTemplate.execute {
-      repository.save(updatedEntity)
+      repository.save(updatedEntity.copy(ingressUrl = ingressUrl))
     }!!
 
     logAudit(
@@ -575,7 +583,8 @@ class WorkbenchService(
 
   /**
    * Renders a FreeMarker template, applies any configured overlay for the
-   * given variant, and sends the resulting YAML to Kubernetes.
+   * given variant, sends the resulting YAML to Kubernetes, and returns
+   * the merged YAML for post-processing (e.g. extracting ingress host).
    */
   private fun renderAndApply(
     templateName: String,
@@ -583,10 +592,11 @@ class WorkbenchService(
     resourceType: ResourceType,
     namespace: String,
     variant: String? = null
-  ) {
+  ): String {
     val yaml = renderTemplate(templateName, model)
     val mergedYaml = overlayService.applyOverlay(yaml, resourceType, model, variant)
     applyYaml(mergedYaml, namespace)
+    return mergedYaml
   }
 
   private fun buildTemplateModel(entity: WorkbenchInstanceEntity): Map<String, Any?> {
@@ -603,6 +613,19 @@ class WorkbenchService(
       "storageSize" to entity.storageSize,
       "storageClassName" to (entity.storageClassName ?: "")
     )
+  }
+
+  /**
+   * Extracts the first Ingress host from a rendered Ingress YAML.
+   * Returns null when the Ingress has no rules (base template with `spec: {}`).
+   */
+  private fun extractIngressHost(yaml: String): String? {
+    return try {
+      val tree = com.fasterxml.jackson.databind.ObjectMapper(YAMLFactory()).readTree(yaml)
+      tree.at("/spec/rules/0/host").asText().takeIf { it.isNotBlank() }
+    } catch (_: Exception) {
+      null
+    }
   }
 
   private fun toResponse(entity: WorkbenchInstanceEntity): WorkbenchResponse {
@@ -623,6 +646,7 @@ class WorkbenchService(
       ),
       overlayVariant = entity.overlayVariant,
       serviceEndpoint = "wb-${entity.instanceId}-svc.${entity.namespace}.svc.cluster.local:8080",
+      ingressUrl = entity.ingressUrl,
       createdAt = entity.createdAt,
       updatedAt = entity.updatedAt
     )

@@ -36,6 +36,8 @@ data class WorkbenchInstanceEntity(
   val storageClassName: String? = null,
   @Column("overlay_variant")
   val overlayVariant: String? = null,
+  @Column("ingress_url")
+  val ingressUrl: String? = null,
   @Column("k8s_resources")
   val k8sResources: String = "[]",
   @Column("created_at")

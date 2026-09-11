@@ -31,6 +31,7 @@ export interface WorkbenchResponse {
   resources: ResourceSpec;
   overlayVariant: string | null;
   serviceEndpoint: string | null;
+  ingressUrl: string | null;
   createdAt: string;
   updatedAt: string;
 }

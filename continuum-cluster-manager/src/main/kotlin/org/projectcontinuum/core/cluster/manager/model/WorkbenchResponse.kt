@@ -13,6 +13,7 @@ data class WorkbenchResponse(
   val resources: ResourceSpec,
   val overlayVariant: String?,
   val serviceEndpoint: String?,
+  val ingressUrl: String?,
   val createdAt: Instant,
   val updatedAt: Instant
 )

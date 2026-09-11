@@ -22,6 +22,7 @@ class WorkbenchResponseTest {
       resources = ResourceSpec(cpuRequest = "2"),
       overlayVariant = null,
       serviceEndpoint = "wb-$instanceId-svc.staging.svc.cluster.local:8080",
+      ingressUrl = null,
       createdAt = now,
       updatedAt = now
     )
@@ -34,6 +35,7 @@ class WorkbenchResponseTest {
     assertEquals("theiaide/theia:latest", response.image)
     assertEquals("2", response.resources.cpuRequest)
     assertEquals("wb-$instanceId-svc.staging.svc.cluster.local:8080", response.serviceEndpoint)
+    assertNull(response.ingressUrl)
     assertEquals(now, response.createdAt)
     assertEquals(now, response.updatedAt)
   }
@@ -50,6 +52,7 @@ class WorkbenchResponseTest {
       resources = ResourceSpec(),
       overlayVariant = null,
       serviceEndpoint = null,
+      ingressUrl = null,
       createdAt = Instant.now(),
       updatedAt = Instant.now()
     )
@@ -62,8 +65,8 @@ class WorkbenchResponseTest {
     val id = UUID.randomUUID()
     val now = Instant.now()
 
-    val r1 = WorkbenchResponse(id, "wb", "ns", "u", "RUNNING", "img", ResourceSpec(), null, "ep", now, now)
-    val r2 = WorkbenchResponse(id, "wb", "ns", "u", "RUNNING", "img", ResourceSpec(), null, "ep", now, now)
+    val r1 = WorkbenchResponse(id, "wb", "ns", "u", "RUNNING", "img", ResourceSpec(), null, "ep", null, now, now)
+    val r2 = WorkbenchResponse(id, "wb", "ns", "u", "RUNNING", "img", ResourceSpec(), null, "ep", null, now, now)
 
     assertEquals(r1, r2)
     assertEquals(r1.hashCode(), r2.hashCode())
