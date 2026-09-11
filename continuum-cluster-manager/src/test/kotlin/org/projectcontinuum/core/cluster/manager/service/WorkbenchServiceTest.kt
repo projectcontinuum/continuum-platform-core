@@ -55,7 +55,7 @@ class WorkbenchServiceTest {
       namespace = "default"
     )
 
-    val overlayService = OverlayService(OverlayProperties(enabled = false))
+    val overlayService = OverlayService(OverlayProperties(enabled = false), freemarkerCfg)
 
     service = WorkbenchService(repository, client, freemarkerCfg, transactionTemplate, workbenchProperties, overlayService)
   }
@@ -114,6 +114,10 @@ class WorkbenchServiceTest {
     val pvcs = client.persistentVolumeClaims().inNamespace("default")
       .withLabel("instance-id", response.instanceId.toString()).list().items
     assertEquals(1, pvcs.size)
+
+    val ingresses = client.network().v1().ingresses().inNamespace("default")
+      .withLabel("instance-id", response.instanceId.toString()).list().items
+    assertEquals(1, ingresses.size)
   }
 
   @Test
@@ -169,6 +173,7 @@ class WorkbenchServiceTest {
     assertEquals("1Gi", response.resources.memoryLimit)
     assertEquals("5Gi", response.resources.storageSize)
     assertNull(response.resources.storageClassName)
+    assertNull(response.overlayVariant)
   }
 
   @Test
@@ -215,6 +220,17 @@ class WorkbenchServiceTest {
     val response = service.createWorkbench("user-1", request)
 
     assertEquals(workbenchProperties.namespace, response.namespace)
+  }
+
+  @Test
+  fun `createWorkbench with variant stores overlayVariant in entity`() {
+    val request = WorkbenchCreateRequest(instanceName = "variant-wb", variant = "gpu-enabled")
+    val response = service.createWorkbench("user-1", request)
+
+    assertEquals("gpu-enabled", response.overlayVariant)
+
+    val entity = repository.findById(response.instanceId).get()
+    assertEquals("gpu-enabled", entity.overlayVariant)
   }
 
   // ── getWorkbenchStatus ──────────────────────────────────────────────
@@ -351,7 +367,7 @@ class WorkbenchServiceTest {
   }
 
   @Test
-  fun `deleteWorkbench removes all K8s resources - deployment, service, and pvc`() {
+  fun `deleteWorkbench removes all K8s resources - deployment, service, pvc, and ingress`() {
     val created = service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "full-del-wb"))
     val instanceId = created.instanceId.toString()
 
@@ -362,6 +378,8 @@ class WorkbenchServiceTest {
       .withLabel("instance-id", instanceId).list().items.size)
     assertEquals(1, client.persistentVolumeClaims().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
+    assertEquals(1, client.network().v1().ingresses().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
 
     service.deleteWorkbench("user-1", "full-del-wb")
 
@@ -371,6 +389,8 @@ class WorkbenchServiceTest {
     assertEquals(0, client.services().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
     assertEquals(0, client.persistentVolumeClaims().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+    assertEquals(0, client.network().v1().ingresses().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
   }
 
@@ -538,7 +558,7 @@ class WorkbenchServiceTest {
   }
 
   @Test
-  fun `updateWorkbench reapplies K8s deployment and service`() {
+  fun `updateWorkbench reapplies K8s deployment, service, and ingress`() {
     val created = service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "k8s-upd-wb"))
 
     service.updateWorkbench(
@@ -555,21 +575,28 @@ class WorkbenchServiceTest {
     val services = client.services().inNamespace("default")
       .withLabel("instance-id", created.instanceId.toString()).list().items
     assertEquals(1, services.size)
+
+    // Verify ingress still exists after update
+    val ingresses = client.network().v1().ingresses().inNamespace("default")
+      .withLabel("instance-id", created.instanceId.toString()).list().items
+    assertEquals(1, ingresses.size)
   }
 
   // ── suspendWorkbench ────────────────────────────────────────────────
 
   @Test
-  fun `suspendWorkbench sets status to SUSPENDED and removes deployment and service but keeps PVC`() {
+  fun `suspendWorkbench sets status to SUSPENDED and removes deployment, service, and ingress but keeps PVC`() {
     val created = service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "suspend-wb"))
     val instanceId = created.instanceId.toString()
 
-    // Verify all 3 resources exist before suspend
+    // Verify all 4 resources exist before suspend
     assertEquals(1, client.apps().deployments().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
     assertEquals(1, client.services().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
     assertEquals(1, client.persistentVolumeClaims().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+    assertEquals(1, client.network().v1().ingresses().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
 
     val response = service.suspendWorkbench("user-1", "suspend-wb")
@@ -577,10 +604,12 @@ class WorkbenchServiceTest {
     assertEquals(WorkbenchStatus.SUSPENDED.name, response.status)
     assertEquals("suspend-wb", response.instanceName)
 
-    // Deployment and Service should be deleted
+    // Deployment, Service, and Ingress should be deleted
     assertEquals(0, client.apps().deployments().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
     assertEquals(0, client.services().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+    assertEquals(0, client.network().v1().ingresses().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
 
     // PVC should still exist
@@ -633,16 +662,18 @@ class WorkbenchServiceTest {
   // ── resumeWorkbench ─────────────────────────────────────────────────
 
   @Test
-  fun `resumeWorkbench re-creates deployment and service and sets status to RUNNING`() {
+  fun `resumeWorkbench re-creates deployment, service, and ingress and sets status to RUNNING`() {
     val created = service.createWorkbench("user-1", WorkbenchCreateRequest(instanceName = "resume-wb"))
     val instanceId = created.instanceId.toString()
 
     service.suspendWorkbench("user-1", "resume-wb")
 
-    // Verify deployment and service are gone after suspend
+    // Verify deployment, service, and ingress are gone after suspend
     assertEquals(0, client.apps().deployments().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
     assertEquals(0, client.services().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+    assertEquals(0, client.network().v1().ingresses().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
 
     val response = service.resumeWorkbench("user-1", "resume-wb")
@@ -650,10 +681,12 @@ class WorkbenchServiceTest {
     assertEquals(WorkbenchStatus.RUNNING.name, response.status)
     assertEquals("resume-wb", response.instanceName)
 
-    // Deployment and Service should be re-created
+    // Deployment, Service, and Ingress should be re-created
     assertEquals(1, client.apps().deployments().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
     assertEquals(1, client.services().inNamespace("default")
+      .withLabel("instance-id", instanceId).list().items.size)
+    assertEquals(1, client.network().v1().ingresses().inNamespace("default")
       .withLabel("instance-id", instanceId).list().items.size)
 
     // PVC should still exist
@@ -717,31 +750,38 @@ class WorkbenchServiceTest {
     assertEquals(WorkbenchStatus.RUNNING.name, resumed.status)
   }
 
-  // ── Overlay integration tests ──────────────────────────────────────────
+  // ── Overlay variant integration tests ─────────────────────────────────
 
   @Test
-  fun `createWorkbench with overlay applies overlay annotations to K8s resources`(@TempDir overlayDir: java.nio.file.Path) {
-    // Write overlay that adds annotations
-    java.nio.file.Files.writeString(overlayDir.resolve("deployment.yaml"), """
+  fun `createWorkbench with variant applies overlay annotations to K8s resources`(@TempDir overlayDir: java.nio.file.Path) {
+    // Write variant overlay files
+    java.nio.file.Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), """
       metadata:
         annotations:
           cluster.example.com/team: platform
     """.trimIndent())
-    java.nio.file.Files.writeString(overlayDir.resolve("service.yaml"), """
+    java.nio.file.Files.writeString(overlayDir.resolve("gpu--service.yaml"), """
       metadata:
         annotations:
           cluster.example.com/team: platform
     """.trimIndent())
-    java.nio.file.Files.writeString(overlayDir.resolve("pvc.yaml"), """
+    java.nio.file.Files.writeString(overlayDir.resolve("gpu--pvc.yaml"), """
+      metadata:
+        annotations:
+          cluster.example.com/team: platform
+    """.trimIndent())
+    java.nio.file.Files.writeString(overlayDir.resolve("gpu--ingress.yaml"), """
       metadata:
         annotations:
           cluster.example.com/team: platform
     """.trimIndent())
 
-    val overlayService = OverlayService(OverlayProperties(enabled = true, path = overlayDir.toString()))
+    val overlayService = OverlayService(OverlayProperties(enabled = true, path = overlayDir.toString()), freemarkerCfg)
     val overlayEnabledService = WorkbenchService(repository, client, freemarkerCfg, transactionTemplate, workbenchProperties, overlayService)
 
-    val response = overlayEnabledService.createWorkbench("user-overlay-1", WorkbenchCreateRequest(instanceName = "overlay-wb"))
+    val response = overlayEnabledService.createWorkbench("user-overlay-1", WorkbenchCreateRequest(instanceName = "overlay-wb", variant = "gpu"))
+
+    assertEquals("gpu", response.overlayVariant)
 
     // Verify the Deployment has the overlay annotation
     val deployments = client.apps().deployments().inNamespace("default")
@@ -760,11 +800,17 @@ class WorkbenchServiceTest {
       .withLabel("instance-id", response.instanceId.toString()).list().items
     assertEquals(1, pvcs.size)
     assertEquals("platform", pvcs[0].metadata.annotations?.get("cluster.example.com/team"))
+
+    // Verify the Ingress has the overlay annotation
+    val ingresses = client.network().v1().ingresses().inNamespace("default")
+      .withLabel("instance-id", response.instanceId.toString()).list().items
+    assertEquals(1, ingresses.size)
+    assertEquals("platform", ingresses[0].metadata.annotations?.get("cluster.example.com/team"))
   }
 
   @Test
-  fun `createWorkbench with overlay adds tolerations to deployment`(@TempDir overlayDir: java.nio.file.Path) {
-    java.nio.file.Files.writeString(overlayDir.resolve("deployment.yaml"), """
+  fun `createWorkbench with variant adds tolerations to deployment`(@TempDir overlayDir: java.nio.file.Path) {
+    java.nio.file.Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), """
       spec:
         template:
           spec:
@@ -777,10 +823,10 @@ class WorkbenchServiceTest {
               workload-type: workbench
     """.trimIndent())
 
-    val overlayService = OverlayService(OverlayProperties(enabled = true, path = overlayDir.toString()))
+    val overlayService = OverlayService(OverlayProperties(enabled = true, path = overlayDir.toString()), freemarkerCfg)
     val overlayEnabledService = WorkbenchService(repository, client, freemarkerCfg, transactionTemplate, workbenchProperties, overlayService)
 
-    val response = overlayEnabledService.createWorkbench("user-overlay-2", WorkbenchCreateRequest(instanceName = "toleration-wb"))
+    val response = overlayEnabledService.createWorkbench("user-overlay-2", WorkbenchCreateRequest(instanceName = "toleration-wb", variant = "gpu"))
 
     val deployments = client.apps().deployments().inNamespace("default")
       .withLabel("instance-id", response.instanceId.toString()).list().items
@@ -797,26 +843,66 @@ class WorkbenchServiceTest {
   }
 
   @Test
-  fun `resumeWorkbench with overlay applies overlay to recreated resources`(@TempDir overlayDir: java.nio.file.Path) {
-    // Create without overlay first
-    val response = service.createWorkbench("user-overlay-3", WorkbenchCreateRequest(instanceName = "resume-overlay-wb"))
-    service.suspendWorkbench("user-overlay-3", "resume-overlay-wb")
-
-    // Now set up a service with overlay enabled and resume
-    java.nio.file.Files.writeString(overlayDir.resolve("deployment.yaml"), """
+  fun `resumeWorkbench with variant applies overlay to recreated resources`(@TempDir overlayDir: java.nio.file.Path) {
+    // Create with a variant
+    java.nio.file.Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), """
       metadata:
         annotations:
           cluster.example.com/resumed: "true"
     """.trimIndent())
 
-    val overlayService = OverlayService(OverlayProperties(enabled = true, path = overlayDir.toString()))
+    val overlayService = OverlayService(OverlayProperties(enabled = true, path = overlayDir.toString()), freemarkerCfg)
     val overlayEnabledService = WorkbenchService(repository, client, freemarkerCfg, transactionTemplate, workbenchProperties, overlayService)
 
+    val response = overlayEnabledService.createWorkbench("user-overlay-3", WorkbenchCreateRequest(instanceName = "resume-overlay-wb", variant = "gpu"))
+    overlayEnabledService.suspendWorkbench("user-overlay-3", "resume-overlay-wb")
+
+    // Resume — variant should be preserved from entity
     overlayEnabledService.resumeWorkbench("user-overlay-3", "resume-overlay-wb")
 
     val deployments = client.apps().deployments().inNamespace("default")
       .withLabel("instance-id", response.instanceId.toString()).list().items
     assertEquals(1, deployments.size)
     assertEquals("true", deployments[0].metadata.annotations?.get("cluster.example.com/resumed"))
+  }
+
+  @Test
+  fun `createWorkbench without variant creates resources without overlay`(@TempDir overlayDir: java.nio.file.Path) {
+    // Overlay files exist but no variant is specified
+    java.nio.file.Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), """
+      metadata:
+        annotations:
+          cluster.example.com/team: platform
+    """.trimIndent())
+
+    val overlayService = OverlayService(OverlayProperties(enabled = true, path = overlayDir.toString()), freemarkerCfg)
+    val overlayEnabledService = WorkbenchService(repository, client, freemarkerCfg, transactionTemplate, workbenchProperties, overlayService)
+
+    val response = overlayEnabledService.createWorkbench("user-no-variant", WorkbenchCreateRequest(instanceName = "no-variant-wb"))
+
+    assertNull(response.overlayVariant)
+
+    // Verify the Deployment does NOT have overlay annotations
+    val deployments = client.apps().deployments().inNamespace("default")
+      .withLabel("instance-id", response.instanceId.toString()).list().items
+    assertEquals(1, deployments.size)
+    assertNull(deployments[0].metadata.annotations?.get("cluster.example.com/team"))
+  }
+
+  @Test
+  fun `FreeMarker overlay with userId renders correctly in K8s resource`(@TempDir overlayDir: java.nio.file.Path) {
+    // Overlay uses FreeMarker template variable
+    java.nio.file.Files.writeString(overlayDir.resolve("gpu--ingress.yaml"),
+      "metadata:\n  annotations:\n    owner: \"\${userId}\"")
+
+    val overlayService = OverlayService(OverlayProperties(enabled = true, path = overlayDir.toString()), freemarkerCfg)
+    val overlayEnabledService = WorkbenchService(repository, client, freemarkerCfg, transactionTemplate, workbenchProperties, overlayService)
+
+    val response = overlayEnabledService.createWorkbench("user-freemarker", WorkbenchCreateRequest(instanceName = "fm-wb", variant = "gpu"))
+
+    val ingresses = client.network().v1().ingresses().inNamespace("default")
+      .withLabel("instance-id", response.instanceId.toString()).list().items
+    assertEquals(1, ingresses.size)
+    assertEquals("user-freemarker", ingresses[0].metadata.annotations?.get("owner"))
   }
 }

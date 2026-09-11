@@ -94,23 +94,28 @@ class WorkbenchService(
       memoryLimit = request.resolvedResources().memoryLimit,
       storageSize = request.resolvedResources().storageSize,
       storageClassName = request.resolvedResources().storageClassName,
+      overlayVariant = request.variant,
       createdAt = now,
       updatedAt = now
     )
 
     val templateModel = buildTemplateModel(entity)
+    val variant = entity.overlayVariant
     val k8sResourceIds = mutableListOf<String>()
 
     try {
       // First, create all K8s resources
-      renderAndApply("pvc.ftl", templateModel, ResourceType.PVC, namespace)
+      renderAndApply("pvc.ftl", templateModel, ResourceType.PVC, namespace, variant)
       k8sResourceIds.add("persistentvolumeclaim/wb-${instanceId}-pvc")
 
-      renderAndApply("deployment.ftl", templateModel, ResourceType.DEPLOYMENT, namespace)
+      renderAndApply("deployment.ftl", templateModel, ResourceType.DEPLOYMENT, namespace, variant)
       k8sResourceIds.add("deployment/wb-${instanceId}-deployment")
 
-      renderAndApply("service.ftl", templateModel, ResourceType.SERVICE, namespace)
+      renderAndApply("service.ftl", templateModel, ResourceType.SERVICE, namespace, variant)
       k8sResourceIds.add("service/wb-${instanceId}-svc")
+
+      renderAndApply("ingress.ftl", templateModel, ResourceType.INGRESS, namespace, variant)
+      k8sResourceIds.add("ingress/wb-${instanceId}-ingress")
 
       // Only save to DB after all K8s resources are successfully created
       val savedEntity = transactionTemplate.execute {
@@ -133,7 +138,8 @@ class WorkbenchService(
           "image" to request.resolvedImage(),
           "cpuRequest" to request.resolvedResources().cpuRequest,
           "memoryRequest" to request.resolvedResources().memoryRequest,
-          "storageSize" to request.resolvedResources().storageSize
+          "storageSize" to request.resolvedResources().storageSize,
+          "overlayVariant" to variant
         )
       )
 
@@ -272,7 +278,7 @@ class WorkbenchService(
       throw IllegalArgumentException("Workbench '$instanceName' is already suspended")
     }
 
-    // First, suspend K8s resources (delete deployment and service, keep PVC)
+    // First, suspend K8s resources (delete deployment, service, and ingress — keep PVC)
     try {
       suspendK8sResources(entity.instanceId.toString(), entity.namespace)
     } catch (ex: Exception) {
@@ -337,11 +343,13 @@ class WorkbenchService(
     }
 
     val templateModel = buildTemplateModel(entity)
+    val variant = entity.overlayVariant
 
     // First, recreate K8s resources
     try {
-      renderAndApply("deployment.ftl", templateModel, ResourceType.DEPLOYMENT, entity.namespace)
-      renderAndApply("service.ftl", templateModel, ResourceType.SERVICE, entity.namespace)
+      renderAndApply("deployment.ftl", templateModel, ResourceType.DEPLOYMENT, entity.namespace, variant)
+      renderAndApply("service.ftl", templateModel, ResourceType.SERVICE, entity.namespace, variant)
+      renderAndApply("ingress.ftl", templateModel, ResourceType.INGRESS, entity.namespace, variant)
     } catch (ex: Exception) {
       logger.error("Failed to resume K8s resources for workbench ${entity.instanceId}, rolling back", ex)
       logAudit(
@@ -419,11 +427,13 @@ class WorkbenchService(
     }
 
     val templateModel = buildTemplateModel(updatedEntity)
+    val variant = updatedEntity.overlayVariant
 
     // First, update K8s resources
     try {
-      renderAndApply("deployment.ftl", templateModel, ResourceType.DEPLOYMENT, updatedEntity.namespace)
-      renderAndApply("service.ftl", templateModel, ResourceType.SERVICE, updatedEntity.namespace)
+      renderAndApply("deployment.ftl", templateModel, ResourceType.DEPLOYMENT, updatedEntity.namespace, variant)
+      renderAndApply("service.ftl", templateModel, ResourceType.SERVICE, updatedEntity.namespace, variant)
+      renderAndApply("ingress.ftl", templateModel, ResourceType.INGRESS, updatedEntity.namespace, variant)
     } catch (ex: Exception) {
       logger.error("Failed to update K8s resources for workbench ${entity.instanceId}, rolling back", ex)
       logAudit(
@@ -437,8 +447,10 @@ class WorkbenchService(
       // Rollback by reapplying old configuration
       try {
         val oldTemplateModel = buildTemplateModel(entity)
-        renderAndApply("deployment.ftl", oldTemplateModel, ResourceType.DEPLOYMENT, entity.namespace)
-        renderAndApply("service.ftl", oldTemplateModel, ResourceType.SERVICE, entity.namespace)
+        val oldVariant = entity.overlayVariant
+        renderAndApply("deployment.ftl", oldTemplateModel, ResourceType.DEPLOYMENT, entity.namespace, oldVariant)
+        renderAndApply("service.ftl", oldTemplateModel, ResourceType.SERVICE, entity.namespace, oldVariant)
+        renderAndApply("ingress.ftl", oldTemplateModel, ResourceType.INGRESS, entity.namespace, oldVariant)
       } catch (rollbackEx: Exception) {
         logger.error("Failed to rollback K8s resources during update failure", rollbackEx)
       }
@@ -502,6 +514,8 @@ class WorkbenchService(
             .inNamespace(namespace).withName(name).delete()
           "service" -> kubernetesClient.services()
             .inNamespace(namespace).withName(name).delete()
+          "ingress" -> kubernetesClient.network().v1().ingresses()
+            .inNamespace(namespace).withName(name).delete()
         }
         logger.info("Rolled back K8s resource: $resourceId")
       } catch (ex: Exception) {
@@ -523,6 +537,8 @@ class WorkbenchService(
       .inNamespace(namespace).withLabels(labels).delete()
     kubernetesClient.persistentVolumeClaims()
       .inNamespace(namespace).withLabels(labels).delete()
+    kubernetesClient.network().v1().ingresses()
+      .inNamespace(namespace).withLabels(labels).delete()
   }
 
   private fun suspendK8sResources(instanceId: String, namespace: String) {
@@ -535,6 +551,8 @@ class WorkbenchService(
     kubernetesClient.apps().deployments()
       .inNamespace(namespace).withLabels(labels).delete()
     kubernetesClient.services()
+      .inNamespace(namespace).withLabels(labels).delete()
+    kubernetesClient.network().v1().ingresses()
       .inNamespace(namespace).withLabels(labels).delete()
   }
 
@@ -556,17 +574,18 @@ class WorkbenchService(
   }
 
   /**
-   * Renders a FreeMarker template, applies any configured overlay, and
-   * sends the resulting YAML to Kubernetes.
+   * Renders a FreeMarker template, applies any configured overlay for the
+   * given variant, and sends the resulting YAML to Kubernetes.
    */
   private fun renderAndApply(
     templateName: String,
     model: Map<String, Any?>,
     resourceType: ResourceType,
-    namespace: String
+    namespace: String,
+    variant: String? = null
   ) {
     val yaml = renderTemplate(templateName, model)
-    val mergedYaml = overlayService.applyOverlay(yaml, resourceType)
+    val mergedYaml = overlayService.applyOverlay(yaml, resourceType, model, variant)
     applyYaml(mergedYaml, namespace)
   }
 
@@ -574,6 +593,7 @@ class WorkbenchService(
     return mapOf(
       "instanceId" to entity.instanceId.toString(),
       "namespace" to entity.namespace,
+      "userId" to entity.userId,
       "image" to entity.image,
       "imagePullPolicy" to workbenchProperties.imagePullPolicy,
       "cpuRequest" to entity.cpuRequest,
@@ -601,6 +621,7 @@ class WorkbenchService(
         storageSize = entity.storageSize,
         storageClassName = entity.storageClassName
       ),
+      overlayVariant = entity.overlayVariant,
       serviceEndpoint = "wb-${entity.instanceId}-svc.${entity.namespace}.svc.cluster.local:8080",
       createdAt = entity.createdAt,
       updatedAt = entity.updatedAt

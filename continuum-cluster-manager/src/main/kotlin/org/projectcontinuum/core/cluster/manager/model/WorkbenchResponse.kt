@@ -11,6 +11,7 @@ data class WorkbenchResponse(
   val status: String,
   val image: String,
   val resources: ResourceSpec,
+  val overlayVariant: String?,
   val serviceEndpoint: String?,
   val createdAt: Instant,
   val updatedAt: Instant

@@ -1,5 +1,6 @@
 package org.projectcontinuum.core.cluster.manager.service
 
+import freemarker.template.Configuration
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -14,6 +15,7 @@ class OverlayServiceTest {
   lateinit var overlayDir: Path
 
   private lateinit var service: OverlayService
+  private lateinit var freemarkerCfg: Configuration
 
   private val baseDeploymentYaml = """
     apiVersion: apps/v1
@@ -102,49 +104,92 @@ class OverlayServiceTest {
           storage: 5Gi
   """.trimIndent()
 
+  private val baseIngressYaml = """
+    apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: wb-test-123-ingress
+      namespace: default
+      labels:
+        app: continuum-workbench
+        instance-id: "test-123"
+        managed-by: continuum-cluster-manager
+    spec: {}
+  """.trimIndent()
+
+  private val defaultModel = mapOf<String, Any?>(
+    "instanceId" to "test-123",
+    "namespace" to "default",
+    "userId" to "user-1",
+    "image" to "projectcontinuum/continuum-workbench:latest",
+    "imagePullPolicy" to "IfNotPresent",
+    "cpuRequest" to "500m",
+    "cpuLimit" to "2",
+    "memoryRequest" to "512Mi",
+    "memoryLimit" to "1Gi",
+    "storageSize" to "5Gi",
+    "storageClassName" to ""
+  )
+
   @BeforeEach
   fun setUp() {
+    freemarkerCfg = Configuration(Configuration.VERSION_2_3_34)
+    freemarkerCfg.setClassLoaderForTemplateLoading(this::class.java.classLoader, "/templates")
+    freemarkerCfg.defaultEncoding = "UTF-8"
+
     val properties = OverlayProperties(enabled = true, path = overlayDir.toString())
-    service = OverlayService(properties)
+    service = OverlayService(properties, freemarkerCfg)
   }
 
   // ── disabled / no-op scenarios ─────────────────────────────────────────
 
   @Test
   fun `returns base unchanged when overlays disabled`() {
-    val disabledService = OverlayService(OverlayProperties(enabled = false))
-    val result = disabledService.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val disabledService = OverlayService(OverlayProperties(enabled = false), freemarkerCfg)
+    val result = disabledService.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
     assertEquals(baseDeploymentYaml, result)
   }
 
   @Test
-  fun `returns base unchanged when overlay file does not exist`() {
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+  fun `returns base unchanged when no variant specified`() {
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), """
+      metadata:
+        annotations:
+          custom: value
+    """.trimIndent())
+
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, null)
+    assertEquals(baseDeploymentYaml, result)
+  }
+
+  @Test
+  fun `returns base unchanged when variant overlay file does not exist`() {
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "nonexistent")
     assertEquals(baseDeploymentYaml, result)
   }
 
   @Test
   fun `returns base unchanged when overlay file is empty`() {
-    Files.writeString(overlayDir.resolve("deployment.yaml"), "")
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), "")
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
     assertEquals(baseDeploymentYaml, result)
   }
 
   @Test
   fun `returns base unchanged when overlay file is whitespace only`() {
-    Files.writeString(overlayDir.resolve("deployment.yaml"), "   \n  \n  ")
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), "   \n  \n  ")
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
     assertEquals(baseDeploymentYaml, result)
   }
 
   @Test
   fun `returns base unchanged when overlay directory does not exist`() {
-    val missingDir = OverlayService(OverlayProperties(enabled = true, path = "/nonexistent/path"))
-    val result = missingDir.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val missingDir = OverlayService(OverlayProperties(enabled = true, path = "/nonexistent/path"), freemarkerCfg)
+    val result = missingDir.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
     assertEquals(baseDeploymentYaml, result)
   }
 
-  // ── deployment overlays ────────────────────────────────────────────────
+  // ── variant deployment overlays ────────────────────────────────────────
 
   @Test
   fun `deployment overlay adds tolerations`() {
@@ -158,9 +203,9 @@ class OverlayServiceTest {
                 value: "true"
                 effect: "NoSchedule"
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("deployment.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), overlay)
 
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
 
     assertTrue(result.contains("tolerations"))
     assertTrue(result.contains("workbench"))
@@ -177,9 +222,9 @@ class OverlayServiceTest {
               workload-type: workbench
               accelerator: nvidia-tesla-v100
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("deployment.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), overlay)
 
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
 
     assertTrue(result.contains("nodeSelector"))
     assertTrue(result.contains("workload-type"))
@@ -194,9 +239,9 @@ class OverlayServiceTest {
           custom.io/team: platform
           custom.io/env: production
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("deployment.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), overlay)
 
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
 
     assertTrue(result.contains("annotations"))
     assertTrue(result.contains("custom.io/team"))
@@ -214,9 +259,9 @@ class OverlayServiceTest {
                 image: busybox:1.36
                 command: ["sh", "-c", "echo setup complete"]
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("deployment.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), overlay)
 
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
 
     assertTrue(result.contains("initContainers"))
     assertTrue(result.contains("setup"))
@@ -231,9 +276,9 @@ class OverlayServiceTest {
           team: data-engineering
           environment: staging
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("deployment.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), overlay)
 
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
 
     assertTrue(result.contains("team"))
     assertTrue(result.contains("data-engineering"))
@@ -253,9 +298,9 @@ class OverlayServiceTest {
               - key: "gpu"
                 operator: "Exists"
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("deployment.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), overlay)
 
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
 
     // The securityContext should still be present (it was in base, not overridden by overlay)
     assertTrue(result.contains("securityContext"))
@@ -264,7 +309,7 @@ class OverlayServiceTest {
     assertTrue(result.contains("tolerations"))
   }
 
-  // ── service overlays ───────────────────────────────────────────────────
+  // ── variant service overlays ───────────────────────────────────────────
 
   @Test
   fun `service overlay adds annotations`() {
@@ -273,15 +318,15 @@ class OverlayServiceTest {
         annotations:
           service.beta.kubernetes.io/aws-load-balancer-internal: "true"
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("service.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--service.yaml"), overlay)
 
-    val result = service.applyOverlay(baseServiceYaml, ResourceType.SERVICE)
+    val result = service.applyOverlay(baseServiceYaml, ResourceType.SERVICE, defaultModel, "gpu")
 
     assertTrue(result.contains("annotations"))
     assertTrue(result.contains("aws-load-balancer-internal"))
   }
 
-  // ── PVC overlays ───────────────────────────────────────────────────────
+  // ── variant PVC overlays ───────────────────────────────────────────────
 
   @Test
   fun `pvc overlay adds storageClassName`() {
@@ -289,9 +334,9 @@ class OverlayServiceTest {
       spec:
         storageClassName: fast-ssd
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("pvc.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--pvc.yaml"), overlay)
 
-    val result = service.applyOverlay(basePvcYaml, ResourceType.PVC)
+    val result = service.applyOverlay(basePvcYaml, ResourceType.PVC, defaultModel, "gpu")
 
     assertTrue(result.contains("storageClassName"))
     assertTrue(result.contains("fast-ssd"))
@@ -304,12 +349,96 @@ class OverlayServiceTest {
         annotations:
           volume.beta.kubernetes.io/storage-provisioner: ebs.csi.aws.com
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("pvc.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--pvc.yaml"), overlay)
 
-    val result = service.applyOverlay(basePvcYaml, ResourceType.PVC)
+    val result = service.applyOverlay(basePvcYaml, ResourceType.PVC, defaultModel, "gpu")
 
     assertTrue(result.contains("storage-provisioner"))
     assertTrue(result.contains("ebs.csi.aws.com"))
+  }
+
+  // ── variant ingress overlays ──────────────────────────────────────────
+
+  @Test
+  fun `ingress overlay adds annotations`() {
+    val overlay = """
+      metadata:
+        annotations:
+          nginx.ingress.kubernetes.io/rewrite-target: /
+    """.trimIndent()
+    Files.writeString(overlayDir.resolve("gpu--ingress.yaml"), overlay)
+
+    val result = service.applyOverlay(baseIngressYaml, ResourceType.INGRESS, defaultModel, "gpu")
+
+    assertTrue(result.contains("annotations"))
+    assertTrue(result.contains("rewrite-target"))
+  }
+
+  @Test
+  fun `ingress overlay adds rules and TLS`() {
+    val overlay = """
+      spec:
+        rules:
+          - host: workbench.example.com
+            http:
+              paths:
+                - path: /
+                  pathType: Prefix
+                  backend:
+                    service:
+                      name: wb-test-123-svc
+                      port:
+                        number: 8080
+        tls:
+          - hosts:
+              - workbench.example.com
+            secretName: workbench-tls
+    """.trimIndent()
+    Files.writeString(overlayDir.resolve("gpu--ingress.yaml"), overlay)
+
+    val result = service.applyOverlay(baseIngressYaml, ResourceType.INGRESS, defaultModel, "gpu")
+
+    assertTrue(result.contains("rules"))
+    assertTrue(result.contains("workbench.example.com"))
+    assertTrue(result.contains("tls"))
+    assertTrue(result.contains("workbench-tls"))
+  }
+
+  // ── FreeMarker template rendering in overlays ─────────────────────────
+
+  @Test
+  fun `overlay with FreeMarker variables renders userId`() {
+    // Use FreeMarker syntax — note: dollar-brace is FreeMarker template syntax
+    val overlay = "metadata:\n  annotations:\n    user-owner: \"\${userId}\""
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), overlay)
+
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
+
+    assertTrue(result.contains("user-owner"))
+    assertTrue(result.contains("user-1"))
+    assertFalse(result.contains("\${userId}"))
+  }
+
+  @Test
+  fun `overlay with FreeMarker variables renders instanceId`() {
+    val overlay = "spec:\n  rules:\n    - host: \"wb-\${instanceId}.example.com\""
+    Files.writeString(overlayDir.resolve("gpu--ingress.yaml"), overlay)
+
+    val result = service.applyOverlay(baseIngressYaml, ResourceType.INGRESS, defaultModel, "gpu")
+
+    assertTrue(result.contains("wb-test-123.example.com"))
+  }
+
+  @Test
+  fun `overlay with FreeMarker rendering error returns base unchanged`() {
+    // Invalid FreeMarker — referencing undefined variable with strict mode
+    val overlay = "metadata:\n  annotations:\n    bad: \"\${undefinedVariable}\""
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), overlay)
+
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
+
+    // Should fall back to base YAML
+    assertTrue(result.contains("wb-test-123-deployment"))
   }
 
   // ── protected field enforcement ────────────────────────────────────────
@@ -320,9 +449,9 @@ class OverlayServiceTest {
       metadata:
         name: hacked-name
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("deployment.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), overlay)
 
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
 
     assertTrue(result.contains("wb-test-123-deployment"))
     assertFalse(result.contains("hacked-name"))
@@ -334,9 +463,9 @@ class OverlayServiceTest {
       metadata:
         namespace: hacked-namespace
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("deployment.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), overlay)
 
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
 
     assertTrue(result.contains("namespace: \"default\"") || result.contains("namespace: default"))
     assertFalse(result.contains("hacked-namespace"))
@@ -349,9 +478,9 @@ class OverlayServiceTest {
         labels:
           instance-id: "hacked-id"
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("deployment.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), overlay)
 
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
 
     assertTrue(result.contains("test-123"))
     assertFalse(result.contains("hacked-id"))
@@ -364,9 +493,9 @@ class OverlayServiceTest {
         labels:
           app: hacked-app
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("deployment.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), overlay)
 
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
 
     assertTrue(result.contains("continuum-workbench"))
     assertFalse(result.contains("hacked-app"))
@@ -379,9 +508,9 @@ class OverlayServiceTest {
         labels:
           managed-by: hacked-manager
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("deployment.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), overlay)
 
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
 
     assertTrue(result.contains("continuum-cluster-manager"))
     assertFalse(result.contains("hacked-manager"))
@@ -396,9 +525,9 @@ class OverlayServiceTest {
             instance-id: "hacked-selector"
             app: "hacked-selector-app"
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("deployment.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), overlay)
 
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
 
     assertFalse(result.contains("hacked-selector"))
   }
@@ -411,21 +540,56 @@ class OverlayServiceTest {
           instance-id: "hacked-selector"
           app: "hacked-selector-app"
     """.trimIndent()
-    Files.writeString(overlayDir.resolve("service.yaml"), overlay)
+    Files.writeString(overlayDir.resolve("gpu--service.yaml"), overlay)
 
-    val result = service.applyOverlay(baseServiceYaml, ResourceType.SERVICE)
+    val result = service.applyOverlay(baseServiceYaml, ResourceType.SERVICE, defaultModel, "gpu")
 
     assertFalse(result.contains("hacked-selector"))
     assertFalse(result.contains("hacked-selector-app"))
+  }
+
+  @Test
+  fun `ingress overlay cannot change metadata name`() {
+    val overlay = """
+      metadata:
+        name: hacked-ingress
+    """.trimIndent()
+    Files.writeString(overlayDir.resolve("gpu--ingress.yaml"), overlay)
+
+    val result = service.applyOverlay(baseIngressYaml, ResourceType.INGRESS, defaultModel, "gpu")
+
+    assertTrue(result.contains("wb-test-123-ingress"))
+    assertFalse(result.contains("hacked-ingress"))
+  }
+
+  @Test
+  fun `ingress overlay cannot change protected labels`() {
+    val overlay = """
+      metadata:
+        labels:
+          instance-id: "hacked-id"
+          app: "hacked-app"
+          managed-by: "hacked-manager"
+    """.trimIndent()
+    Files.writeString(overlayDir.resolve("gpu--ingress.yaml"), overlay)
+
+    val result = service.applyOverlay(baseIngressYaml, ResourceType.INGRESS, defaultModel, "gpu")
+
+    assertTrue(result.contains("test-123"))
+    assertTrue(result.contains("continuum-workbench"))
+    assertTrue(result.contains("continuum-cluster-manager"))
+    assertFalse(result.contains("hacked-id"))
+    assertFalse(result.contains("hacked-app"))
+    assertFalse(result.contains("hacked-manager"))
   }
 
   // ── error handling ─────────────────────────────────────────────────────
 
   @Test
   fun `malformed overlay YAML returns base unchanged`() {
-    Files.writeString(overlayDir.resolve("deployment.yaml"), "this: is: not: valid: yaml: [[[")
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), "this: is: not: valid: yaml: [[[")
 
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
 
     // Should fall back to base YAML
     assertTrue(result.contains("wb-test-123-deployment"))
@@ -433,9 +597,9 @@ class OverlayServiceTest {
 
   @Test
   fun `overlay with non-object root returns base unchanged`() {
-    Files.writeString(overlayDir.resolve("deployment.yaml"), "just a string")
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), "just a string")
 
-    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
+    val result = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
 
     assertTrue(result.contains("wb-test-123-deployment"))
   }
@@ -443,45 +607,111 @@ class OverlayServiceTest {
   // ── resource type routing ──────────────────────────────────────────────
 
   @Test
-  fun `each resource type reads its own overlay file`() {
-    Files.writeString(overlayDir.resolve("deployment.yaml"), """
+  fun `each resource type reads its own variant overlay file`() {
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), """
       metadata:
         annotations:
           overlay: deployment
     """.trimIndent())
-    Files.writeString(overlayDir.resolve("service.yaml"), """
+    Files.writeString(overlayDir.resolve("gpu--service.yaml"), """
       metadata:
         annotations:
           overlay: service
     """.trimIndent())
-    Files.writeString(overlayDir.resolve("pvc.yaml"), """
+    Files.writeString(overlayDir.resolve("gpu--pvc.yaml"), """
       metadata:
         annotations:
           overlay: pvc
     """.trimIndent())
+    Files.writeString(overlayDir.resolve("gpu--ingress.yaml"), """
+      metadata:
+        annotations:
+          overlay: ingress
+    """.trimIndent())
 
-    val deploymentResult = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
-    val serviceResult = service.applyOverlay(baseServiceYaml, ResourceType.SERVICE)
-    val pvcResult = service.applyOverlay(basePvcYaml, ResourceType.PVC)
+    val deploymentResult = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
+    val serviceResult = service.applyOverlay(baseServiceYaml, ResourceType.SERVICE, defaultModel, "gpu")
+    val pvcResult = service.applyOverlay(basePvcYaml, ResourceType.PVC, defaultModel, "gpu")
+    val ingressResult = service.applyOverlay(baseIngressYaml, ResourceType.INGRESS, defaultModel, "gpu")
 
     assertTrue(deploymentResult.contains("overlay: deployment") || deploymentResult.contains("overlay: \"deployment\""))
     assertTrue(serviceResult.contains("overlay: service") || serviceResult.contains("overlay: \"service\""))
     assertTrue(pvcResult.contains("overlay: pvc") || pvcResult.contains("overlay: \"pvc\""))
+    assertTrue(ingressResult.contains("overlay: ingress") || ingressResult.contains("overlay: \"ingress\""))
+  }
+
+  @Test
+  fun `different variants have isolated overlay files`() {
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), """
+      metadata:
+        annotations:
+          variant: gpu
+    """.trimIndent())
+    Files.writeString(overlayDir.resolve("cpu--deployment.yaml"), """
+      metadata:
+        annotations:
+          variant: cpu
+    """.trimIndent())
+
+    val gpuResult = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
+    val cpuResult = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "cpu")
+
+    assertTrue(gpuResult.contains("variant: gpu") || gpuResult.contains("variant: \"gpu\""))
+    assertFalse(gpuResult.contains("variant: cpu") || gpuResult.contains("variant: \"cpu\""))
+    assertTrue(cpuResult.contains("variant: cpu") || cpuResult.contains("variant: \"cpu\""))
+    assertFalse(cpuResult.contains("variant: gpu") || cpuResult.contains("variant: \"gpu\""))
   }
 
   @Test
   fun `missing overlay for one type does not affect another`() {
-    // Only deployment overlay exists
-    Files.writeString(overlayDir.resolve("deployment.yaml"), """
+    // Only deployment overlay exists for the gpu variant
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), """
       metadata:
         annotations:
           custom: value
     """.trimIndent())
 
-    val deploymentResult = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT)
-    val serviceResult = service.applyOverlay(baseServiceYaml, ResourceType.SERVICE)
+    val deploymentResult = service.applyOverlay(baseDeploymentYaml, ResourceType.DEPLOYMENT, defaultModel, "gpu")
+    val serviceResult = service.applyOverlay(baseServiceYaml, ResourceType.SERVICE, defaultModel, "gpu")
 
     assertTrue(deploymentResult.contains("custom"))
     assertEquals(baseServiceYaml, serviceResult)
+  }
+
+  // ── listVariants ──────────────────────────────────────────────────────
+
+  @Test
+  fun `listVariants returns discovered variant names`() {
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), "spec: {}")
+    Files.writeString(overlayDir.resolve("gpu--ingress.yaml"), "spec: {}")
+    Files.writeString(overlayDir.resolve("cpu--deployment.yaml"), "spec: {}")
+    Files.writeString(overlayDir.resolve("nvlink--deployment.yaml"), "spec: {}")
+
+    val variants = service.listVariants()
+
+    assertEquals(listOf("cpu", "gpu", "nvlink"), variants)
+  }
+
+  @Test
+  fun `listVariants returns empty list when disabled`() {
+    val disabledService = OverlayService(OverlayProperties(enabled = false), freemarkerCfg)
+    val variants = disabledService.listVariants()
+    assertTrue(variants.isEmpty())
+  }
+
+  @Test
+  fun `listVariants returns empty list when no overlay files present`() {
+    val variants = service.listVariants()
+    assertTrue(variants.isEmpty())
+  }
+
+  @Test
+  fun `listVariants ignores files without variant naming convention`() {
+    Files.writeString(overlayDir.resolve("deployment.yaml"), "spec: {}")
+    Files.writeString(overlayDir.resolve("gpu--deployment.yaml"), "spec: {}")
+
+    val variants = service.listVariants()
+
+    assertEquals(listOf("gpu"), variants)
   }
 }

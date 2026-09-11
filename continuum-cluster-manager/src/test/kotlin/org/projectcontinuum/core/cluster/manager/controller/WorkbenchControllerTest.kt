@@ -13,6 +13,7 @@ import org.projectcontinuum.core.cluster.manager.model.WorkbenchResponse
 import org.projectcontinuum.core.cluster.manager.model.WorkbenchStatus
 import org.projectcontinuum.core.cluster.manager.service.DockerHubService
 import org.projectcontinuum.core.cluster.manager.service.DockerHubTag
+import org.projectcontinuum.core.cluster.manager.service.OverlayService
 import org.projectcontinuum.core.cluster.manager.service.WorkbenchService
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
@@ -36,6 +37,9 @@ class WorkbenchControllerTest {
   @MockitoBean
   private lateinit var dockerHubService: DockerHubService
 
+  @MockitoBean
+  private lateinit var overlayService: OverlayService
+
   private val objectMapper = jacksonObjectMapper()
 
   private fun sampleResponse(
@@ -51,6 +55,7 @@ class WorkbenchControllerTest {
     status = status,
     image = "theiaide/theia:latest",
     resources = ResourceSpec(),
+    overlayVariant = null,
     serviceEndpoint = "wb-test-svc.$namespace.svc.cluster.local:8080",
     createdAt = Instant.now(),
     updatedAt = Instant.now()
@@ -218,6 +223,7 @@ class WorkbenchControllerTest {
         storageSize = "20Gi",
         storageClassName = "fast-ssd"
       ),
+      overlayVariant = null,
       serviceEndpoint = "wb-$instanceId-svc.staging.svc.cluster.local:8080",
       createdAt = now,
       updatedAt = now

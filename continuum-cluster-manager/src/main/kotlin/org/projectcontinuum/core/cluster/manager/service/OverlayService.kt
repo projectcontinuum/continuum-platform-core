@@ -5,27 +5,37 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator
+import freemarker.template.Configuration
+import freemarker.template.Template
 import jakarta.annotation.PostConstruct
 import org.projectcontinuum.core.cluster.manager.config.OverlayProperties
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.io.StringReader
+import java.io.StringWriter
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 
 /**
  * Resource types that can be customized via overlays.
- * Each maps to an expected filename in the overlay directory.
+ * Each maps to an expected filename suffix in the overlay directory.
  */
 enum class ResourceType(val filename: String) {
   DEPLOYMENT("deployment.yaml"),
   SERVICE("service.yaml"),
-  PVC("pvc.yaml")
+  PVC("pvc.yaml"),
+  INGRESS("ingress.yaml")
 }
 
 /**
- * Loads YAML overlay files from a mounted ConfigMap directory and deep-merges
- * them onto rendered K8s resource YAML before it is applied to the cluster.
+ * Loads YAML overlay files from a mounted ConfigMap directory, renders them
+ * as FreeMarker templates, and deep-merges the result onto rendered K8s
+ * resource YAML before it is applied to the cluster.
+ *
+ * Overlay files follow the naming convention `{variant}--{resource}.yaml`
+ * (e.g. `gpu-enabled--deployment.yaml`). When no variant is specified for
+ * a workbench, no overlay is applied.
  *
  * Merge semantics:
  * - Object fields merge recursively (maps are merged key-by-key)
@@ -38,7 +48,8 @@ enum class ResourceType(val filename: String) {
  */
 @Service
 class OverlayService(
-  private val overlayProperties: OverlayProperties
+  private val overlayProperties: OverlayProperties,
+  private val freemarkerConfig: Configuration
 ) {
 
   private val logger = LoggerFactory.getLogger(OverlayService::class.java)
@@ -64,41 +75,92 @@ class OverlayService(
       return
     }
 
-    val presentFiles = ResourceType.entries
-      .map { it.filename }
-      .filter { Files.exists(overlayDir.resolve(it)) }
+    val presentFiles = Files.list(overlayDir)
+      .map { it.fileName.toString() }
+      .filter { it.contains("--") && it.endsWith(".yaml") }
+      .toList()
+
+    val variants = presentFiles
+      .map { it.substringBefore("--") }
+      .distinct()
+      .sorted()
 
     logger.info(
-      "K8s resource overlays enabled — directory: {}, files present: {}",
+      "K8s resource overlays enabled — directory: {}, variants: {}, files: {}",
       overlayProperties.path,
+      if (variants.isEmpty()) "none" else variants.joinToString(", "),
       if (presentFiles.isEmpty()) "none" else presentFiles.joinToString(", ")
     )
   }
 
   /**
-   * Applies the overlay for [resourceType] onto [baseYaml].
-   * Returns the merged YAML string, or [baseYaml] unchanged if overlays are
-   * disabled, the overlay file is missing, or an error occurs.
+   * Returns the list of available overlay variant names by scanning the
+   * overlay directory for files matching `{variant}--*.yaml`.
+   * Returns an empty list if overlays are disabled or the directory is missing.
    */
-  fun applyOverlay(baseYaml: String, resourceType: ResourceType): String {
+  fun listVariants(): List<String> {
     if (!overlayProperties.enabled) {
+      return emptyList()
+    }
+
+    val overlayDir = Paths.get(overlayProperties.path)
+    if (!Files.isDirectory(overlayDir)) {
+      return emptyList()
+    }
+
+    return try {
+      Files.list(overlayDir)
+        .map { it.fileName.toString() }
+        .filter { it.contains("--") && it.endsWith(".yaml") }
+        .map { it.substringBefore("--") }
+        .distinct()
+        .sorted()
+        .toList()
+    } catch (ex: Exception) {
+      logger.warn("Failed to list overlay variants from {}: {}", overlayProperties.path, ex.message)
+      emptyList()
+    }
+  }
+
+  /**
+   * Applies the overlay for [resourceType] and [variant] onto [baseYaml].
+   *
+   * The overlay file is first rendered as a FreeMarker template with the
+   * given [model] (same variables available to base templates: instanceId,
+   * namespace, userId, etc.), then deep-merged onto the base YAML.
+   *
+   * Returns the merged YAML string, or [baseYaml] unchanged if overlays are
+   * disabled, no variant is specified, the overlay file is missing, or an
+   * error occurs.
+   */
+  fun applyOverlay(
+    baseYaml: String,
+    resourceType: ResourceType,
+    model: Map<String, Any?> = emptyMap(),
+    variant: String? = null
+  ): String {
+    if (!overlayProperties.enabled || variant == null) {
       return baseYaml
     }
 
-    val overlayFile = Paths.get(overlayProperties.path, resourceType.filename)
+    val overlayFile = Paths.get(overlayProperties.path, "${variant}--${resourceType.filename}")
     if (!Files.exists(overlayFile)) {
       return baseYaml
     }
 
     return try {
-      val overlayContent = Files.readString(overlayFile).trim()
-      if (overlayContent.isEmpty()) {
+      val rawOverlayContent = Files.readString(overlayFile).trim()
+      if (rawOverlayContent.isEmpty()) {
         return baseYaml
       }
 
+      // Render overlay as FreeMarker template
+      val renderedOverlay = renderOverlayTemplate(rawOverlayContent, model, variant, resourceType)
+        ?: return baseYaml
+
       val baseTree = yamlMapper.readTree(baseYaml) as? ObjectNode
         ?: return baseYaml
-      val overlayTree = yamlMapper.readTree(overlayContent) as? ObjectNode
+      val overlayTree = yamlMapper.readTree(renderedOverlay) as? ObjectNode
         ?: return baseYaml
 
       // Snapshot protected fields before merge
@@ -111,11 +173,36 @@ class OverlayService(
       restoreProtectedFields(baseTree, protectedSnapshot, resourceType)
 
       val mergedYaml = yamlMapper.writeValueAsString(baseTree)
-      logger.info("Applied {} overlay from {}", resourceType.name, overlayFile)
+      logger.info("Applied {} overlay (variant={}) from {}", resourceType.name, variant, overlayFile)
       mergedYaml
     } catch (ex: Exception) {
-      logger.error("Failed to apply {} overlay from {}: {}", resourceType.name, overlayFile, ex.message, ex)
+      logger.error("Failed to apply {} overlay (variant={}) from {}: {}", resourceType.name, variant, overlayFile, ex.message, ex)
       baseYaml
+    }
+  }
+
+  /**
+   * Renders the overlay content as a FreeMarker template with the given model.
+   * Returns null on failure (fail-open).
+   */
+  private fun renderOverlayTemplate(
+    overlayContent: String,
+    model: Map<String, Any?>,
+    variant: String,
+    resourceType: ResourceType
+  ): String? {
+    return try {
+      val templateName = "${variant}--${resourceType.filename}"
+      val template = Template(templateName, StringReader(overlayContent), freemarkerConfig)
+      val writer = StringWriter()
+      template.process(model, writer)
+      writer.toString().trim().ifEmpty { null }
+    } catch (ex: Exception) {
+      logger.error(
+        "Failed to render FreeMarker overlay template (variant={}, resource={}): {}",
+        variant, resourceType.name, ex.message, ex
+      )
+      null
     }
   }
 
@@ -154,7 +241,7 @@ class OverlayService(
     val selectorMatchLabels = when (resourceType) {
       ResourceType.DEPLOYMENT -> snapshotLabels(base.at("/spec/selector/matchLabels"))
       ResourceType.SERVICE -> snapshotLabels(base.at("/spec/selector"))
-      ResourceType.PVC -> emptyMap()
+      ResourceType.PVC, ResourceType.INGRESS -> emptyMap()
     }
 
     val templateLabels = when (resourceType) {
@@ -206,7 +293,7 @@ class OverlayService(
       ResourceType.SERVICE -> {
         restoreLabelsOnNode(merged.at("/spec/selector"), snapshot.selectorMatchLabels)
       }
-      ResourceType.PVC -> { /* no additional protected fields */ }
+      ResourceType.PVC, ResourceType.INGRESS -> { /* no additional protected fields */ }
     }
   }
 

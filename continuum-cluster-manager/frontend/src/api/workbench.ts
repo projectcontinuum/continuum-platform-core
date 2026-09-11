@@ -141,6 +141,17 @@ export const workbenchApi = {
     });
     return handleResponse<DockerHubTag[]>(response);
   },
+
+  /**
+   * Fetch available overlay variant names
+   */
+  async getAvailableVariants(): Promise<string[]> {
+    const response = await fetch(`${API_BASE}/variants`, {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+    return handleResponse<string[]>(response);
+  },
 };
 
 export { ApiError };
