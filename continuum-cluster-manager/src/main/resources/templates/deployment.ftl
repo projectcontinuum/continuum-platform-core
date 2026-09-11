@@ -28,10 +28,7 @@ spec:
         - name: theia
           image: ${image}
           imagePullPolicy: ${imagePullPolicy}
-          terminationMessagePolicy: FallbackToLogsOnError
           env:
-            - name: NODE_OPTIONS
-              value: "--max-old-space-size=4096 --trace-warnings --report-on-fatalerror"
             - name: NODE_ENV
               value: "production"
           ports:
@@ -46,6 +43,22 @@ spec:
           volumeMounts:
             - name: workspace-storage
               mountPath: /workspace
+          startupProbe:
+            httpGet:
+              path: /
+              port: 8080
+            failureThreshold: 30
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 8080
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 5
 
       volumes:
         - name: workspace-storage
