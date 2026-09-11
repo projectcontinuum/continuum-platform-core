@@ -40,19 +40,7 @@ spec:
           volumeMounts:
             - name: workspace-storage
               mountPath: /workspace
-          livenessProbe:
-            tcpSocket:
-              port: 8080
-            initialDelaySeconds: 60
-            periodSeconds: 15
-            timeoutSeconds: 5
-            failureThreshold: 6
-          readinessProbe:
-            tcpSocket:
-              port: 8080
-            initialDelaySeconds: 10
-            periodSeconds: 5
-            timeoutSeconds: 3
+
       volumes:
         - name: workspace-storage
           persistentVolumeClaim:
