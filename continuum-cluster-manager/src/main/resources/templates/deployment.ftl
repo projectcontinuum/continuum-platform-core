@@ -28,9 +28,10 @@ spec:
         - name: theia
           image: ${image}
           imagePullPolicy: ${imagePullPolicy}
+          terminationMessagePolicy: FallbackToLogsOnError
           env:
             - name: NODE_OPTIONS
-              value: "--max-old-space-size=4096 --trace-warnings"
+              value: "--max-old-space-size=4096 --trace-warnings --report-on-fatalerror"
             - name: NODE_ENV
               value: "production"
           ports:
